@@ -6,7 +6,8 @@
     "@langchain/openai": "^0.3.16",
     "next": "^15.1.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "viem": "^2.21.58"
   },
   "scripts": {
     "dev": "next dev",

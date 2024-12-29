@@ -5,10 +5,10 @@ export default function TestBrian() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const testBrian = async () => {
+  const testAgent = async () => {
     setLoading(true);
     try {
-      const result = await fetch('/api/brian', {
+      const result = await fetch('/api/brian-agent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -25,25 +25,25 @@ export default function TestBrian() {
 
   return (
     <div style={{ padding: '20px' }}>
-      <h1>Test Brian AI API</h1>
+      <h1>Test Brian AI Agent</h1>
       <div style={{ marginBottom: '20px' }}>
         <input
           type="text"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Enter your question"
+          placeholder="Enter your prompt"
           style={{ width: '300px', marginRight: '10px' }}
         />
         <button 
-          onClick={testBrian}
+          onClick={testAgent}
           disabled={loading || !prompt}
         >
-          {loading ? 'Loading...' : 'Ask Brian'}
+          {loading ? 'Running...' : 'Test Agent'}
         </button>
       </div>
-      <pre style={{ marginTop: '20px', whiteSpace: 'pre-wrap' }}>
+      <pre style={{ whiteSpace: 'pre-wrap' }}>
         {response}
       </pre>
     </div>
   );
-} 
+}
