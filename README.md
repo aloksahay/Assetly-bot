@@ -1,2 +1,2 @@
 # Assetly
- An AI asset manager
+An AI asset manager
