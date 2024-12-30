@@ -1,11 +1,13 @@
+'use client';
 import { useState } from 'react';
 
 export default function TestBrian() {
-  const [response, setResponse] = useState<string>('');
   const [prompt, setPrompt] = useState('');
+  const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
 
   const testAgent = async () => {
+    if (!prompt) return;
     setLoading(true);
     try {
       const result = await fetch('/api/brian-agent', {

@@ -2,6 +2,7 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
+  "/wallet-analysis": "pages/wallet-analysis.js",
   "/test-brian": "pages/test-brian.js",
-  "/api/brian-agent": "pages/api/brian-agent.js"
+  "/api/analyze-portfolio": "pages/api/analyze-portfolio.js"
 }
