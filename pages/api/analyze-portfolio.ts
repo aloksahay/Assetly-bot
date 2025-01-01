@@ -24,63 +24,45 @@ export default async function handler(
     // Get wallet portfolio from Zerion
     const walletInfo = await zerion.getWalletPortfolio(address, chain);
 
-    // Initialize Brian Agent server-side
+    // Initialize Brian Agent
     const agent = await createBrianAgent({
       apiKey: process.env.BRIAN_API_KEY!,
       privateKeyOrAccount: process.env.AGENT_PRIVATE_KEY! as `0x${string}`,
-      llm: new ChatOpenAI({ apiKey: process.env.OPENAI_API_KEY }),
-      metadata: {
-        supportedProtocols: ["uniswap", "aave", "curve", "compound", "balancer"],
-        supportedChains: ["ethereum", "arbitrum", "optimism", "polygon", "base"]
-      }
+      llm: new ChatOpenAI({ apiKey: process.env.OPENAI_API_KEY })
     });
+
+    // Format portfolio data for analysis
+    const portfolioSummary = `
+      Portfolio Value: $${walletInfo.totalValueUSD.toFixed(2)}
+      Native Balance: ${walletInfo.nativeBalance.amount} (${chain}) ($${walletInfo.nativeBalance.valueUSD.toFixed(2)})
+      Tokens: ${walletInfo.tokens.map(t => 
+        `\n- ${t.symbol}: ${t.balance} ($${t.valueUSD.toFixed(2)})`
+      ).join('')}
+    `;
 
     // Get DeFi strategy recommendations
     const defiStrategy = await agent.invoke({
-      input: `As a DeFi portfolio manager, analyze this wallet and suggest optimal defi yield strategies:
-        Wallet: ${address} on ${chain}
-        Native Balance: ${walletInfo.nativeBalance}
-        Tokens: ${JSON.stringify(walletInfo.tokens)}
+      input: `Analyze this portfolio and suggest optimal DeFi strategies:
+        ${portfolioSummary}
         
         Provide:
-        1. Portfolio Overview
-        - Total value in USD
-        - Current asset allocation
-        - Risk exposure levels
+        1. Portfolio Analysis
+        - Asset allocation overview
+        - Risk assessment
+        - Major opportunities
         
-        2. Compound Opportunities
-        - Best lending positions on Compound
-        - Current Compound APY rates
-        - Supply and borrow opportunities
-        - Compound rewards if available
+        2. DeFi Opportunities
+        - Best yield farming positions
+        - Lending opportunities
+        - Liquidity provision options
         
         3. Risk Management
-        - Recommended collateral ratio
-        - Liquidation risks
-        - Protocol exposure limits`,
+        - Diversification suggestions
+        - Risk mitigation strategies
+        - Protocol exposure recommendations`,
       metadata: { address, chain }
     });
 
-    // Get specific transaction recommendations
-    const transactions = await agent.invoke({
-      input: `Generate specific Compound transaction recommendations to optimize this portfolio:
-        Current Holdings: ${JSON.stringify(walletInfo)}
-        
-        Suggest:
-        1. Supply positions on Compound
-        2. Borrow positions on Compound
-        3. Optimal collateral ratios
-        4. Risk hedging moves
-        
-        For each transaction include:
-        - Expected APY/returns
-        - Risk level (including liquidation risks)
-        - Specific market details
-        - Step by step instructions`,
-      metadata: { address, chain }
-    });
-
-    // Format response
     return res.status(200).json({
       currentPortfolio: {
         walletInfo,
@@ -88,7 +70,6 @@ export default async function handler(
       },
       analysis: {
         defiStrategy,
-        transactions,
         chain,
         address
       }
