@@ -1,10 +1,10 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { createBrianAgent } from "@brian-ai/langchain";
 import { ChatOpenAI } from "@langchain/openai";
-import { InfuraService } from "../../utils/infura";
+import { ZerionService } from "../../utils/zerion";
 
 // Initialize services
-const infura = new InfuraService(process.env.INFURA_API_KEY!);
+const zerion = new ZerionService(process.env.ZERION_API_KEY!);
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,7 +15,14 @@ export default async function handler(
   }
 
   try {
-    const { address, chain } = req.body;
+    const { address, chain = 'ethereum' } = req.body;
+
+    if (!address) {
+      return res.status(400).json({ error: 'Address is required' });
+    }
+
+    // Get wallet portfolio from Zerion
+    const walletInfo = await zerion.getWalletPortfolio(address, chain);
 
     // Initialize Brian Agent server-side
     const agent = await createBrianAgent({
@@ -27,9 +34,6 @@ export default async function handler(
         supportedChains: ["ethereum", "arbitrum", "optimism", "polygon", "base"]
       }
     });
-
-    // Get wallet info from Infura
-    const walletInfo = await infura.getWalletInfo(address, chain);
 
     // Get DeFi strategy recommendations
     const defiStrategy = await agent.invoke({
