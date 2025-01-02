@@ -2,8 +2,8 @@ import { formatEther, formatUnits } from 'viem';
 
 // Keep only the types and constants we might need later
 export const CHAIN_IDS = {
-  'ethereum': 5,
-  'arbitrum': 421613,
+  'ethereum': 11155111,
+  'arbitrum': 421614,
   'base': 84531
 } as const;
 

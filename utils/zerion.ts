@@ -20,8 +20,8 @@ export class ZerionService {
   
   // Add testnet chain mapping
   private readonly TESTNET_CHAINS = {
-    'ethereum': 'goerli',
-    'arbitrum': 'arbitrum-goerli',
+    'ethereum': 'sepolia',
+    'arbitrum': 'arbitrum-sepolia',
     'base': 'base-goerli'
   } as const;
 

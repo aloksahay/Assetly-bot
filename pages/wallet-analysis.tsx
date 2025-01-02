@@ -64,9 +64,9 @@ export default function WalletAnalysis() {
           onChange={(e) => setChain(e.target.value)}
           style={{ width: '100%', padding: '8px', marginBottom: '16px' }}
         >
-          <option value="ethereum">Ethereum</option>
-          <option value="arbitrum">Arbitrum</option>
-          <option value="base">Base</option>
+          <option value="ethereum">Ethereum (Sepolia)</option>
+          <option value="arbitrum">Arbitrum (Sepolia)</option>
+          <option value="base">Base (Goerli)</option>
         </select>
 
         <button 
