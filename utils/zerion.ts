@@ -18,6 +18,13 @@ interface ZerionPortfolio {
 export class ZerionService {
   private readonly API_URL = 'https://api.zerion.io/v1';
   
+  // Add testnet chain mapping
+  private readonly TESTNET_CHAINS = {
+    'ethereum': 'goerli',
+    'arbitrum': 'arbitrum-goerli',
+    'base': 'base-goerli'
+  } as const;
+
   constructor(private apiKey: string) {
     if (!apiKey) throw new Error('Zerion API key is required');
   }
@@ -26,9 +33,10 @@ export class ZerionService {
     try {
       const url = new URL(`${this.API_URL}/wallets/${address}/positions`);
       
-      // Add filters if chain is specified
+      // Map mainnet chain names to testnet names
       if (chain) {
-        url.searchParams.append('filter[chain]', chain);
+        const testnetChain = this.TESTNET_CHAINS[chain as keyof typeof this.TESTNET_CHAINS];
+        url.searchParams.append('filter[chain]', testnetChain);
       }
       
       url.searchParams.append('filter[min_value]', '1');

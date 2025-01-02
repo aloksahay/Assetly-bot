@@ -33,8 +33,8 @@ export default async function handler(
 
     // Format portfolio data for analysis
     const portfolioSummary = `
-      Portfolio Value: $${walletInfo.totalValueUSD.toFixed(2)}
-      Native Balance: ${walletInfo.nativeBalance.amount} (${chain}) ($${walletInfo.nativeBalance.valueUSD.toFixed(2)})
+      Portfolio Value (Testnet): $${walletInfo.totalValueUSD.toFixed(2)}
+      Native Balance: ${walletInfo.nativeBalance.amount} (${chain} testnet) ($${walletInfo.nativeBalance.valueUSD.toFixed(2)})
       Tokens: ${walletInfo.tokens.map(t => 
         `\n- ${t.symbol}: ${t.balance} ($${t.valueUSD.toFixed(2)})`
       ).join('')}

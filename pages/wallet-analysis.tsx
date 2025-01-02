@@ -36,8 +36,16 @@ export default function WalletAnalysis() {
     }
   };
 
+  const TestnetWarning = () => (
+    <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+      <p className="font-bold">Testnet Mode</p>
+      <p>This application is running on test networks. Use test tokens only.</p>
+    </div>
+  );
+
   return (
     <div style={{ maxWidth: '800px', margin: '40px auto', padding: '20px' }}>
+      <TestnetWarning />
       <h1 style={{ marginBottom: '20px' }}>Wallet Analysis</h1>
       
       <div style={{ marginBottom: '20px' }}>
