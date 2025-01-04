@@ -1,29 +1,8 @@
-import fetch from 'node-fetch';
-
-interface ZerionPortfolio {
-  nativeBalance: {
-    amount: string;
-    valueUSD: number;
-  };
-  tokens: {
-    address: string;
-    symbol: string;
-    name: string;
-    balance: string;
-    valueUSD: number;
-  }[];
-  totalValueUSD: number;
-}
+import { ZerionPortfolio } from './types';
+import { TESTNET_CHAINS } from './constants';
 
 export class ZerionService {
   private readonly API_URL = 'https://api.zerion.io/v1';
-  
-  // Add testnet chain mapping
-  private readonly TESTNET_CHAINS = {
-    'ethereum': 'sepolia',
-    'arbitrum': 'arbitrum-sepolia',
-    'base': 'base-goerli'
-  } as const;
 
   constructor(private apiKey: string) {
     if (!apiKey) throw new Error('Zerion API key is required');
@@ -31,106 +10,93 @@ export class ZerionService {
 
   async getWalletPortfolio(address: string, chain?: string): Promise<ZerionPortfolio> {
     try {
-      const url = new URL(`${this.API_URL}/wallets/${address}/positions`);
-      
-      // Map mainnet chain names to testnet names
-      if (chain) {
-        const testnetChain = this.TESTNET_CHAINS[chain as keyof typeof this.TESTNET_CHAINS];
-        url.searchParams.append('filter[chain]', testnetChain);
-      }
-      
-      url.searchParams.append('filter[min_value]', '1');
-      url.searchParams.append('currency', 'usd');
-
-      console.log('Fetching from Zerion:', url.toString());
-
-      const response = await fetch(url.toString(), {
-        headers: {
-          'accept': 'application/json',
-          'authorization': `Basic ${Buffer.from(this.apiKey + ':').toString('base64')}`
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error('Zerion API error:', {
-          status: response.status,
-          statusText: response.statusText,
-          data: errorData
-        });
-        throw new Error(`Zerion API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Raw Zerion response:', JSON.stringify(data, null, 2));
-      
-      // Format response
-      const positions = data.data || [];
-      let totalValueUSD = 0;
-      let nativeToken = null;
-      const tokens = [];
-
-      for (const position of positions) {
-        if (!position.attributes) {
-          console.warn('Position missing attributes:', position);
-          continue;
-        }
-
-        const { attributes } = position;
-        const value = parseFloat(attributes.value || '0');
-        totalValueUSD += value;
-
-        // Check position type and format accordingly
-        if (attributes.fungible_info && attributes.fungible_info.name) {
-          // Handle fungible token
-          if (attributes.fungible_info.implementations?.[0]?.address_name === 'ethereum') {
-            // Native token
-            nativeToken = {
-              amount: attributes.quantity || '0',
-              valueUSD: value
-            };
-          } else {
-            // ERC20 token
-            tokens.push({
-              address: attributes.fungible_info.implementations?.[0]?.address || '',
-              symbol: attributes.fungible_info.symbol || 'UNKNOWN',
-              name: attributes.fungible_info.name || 'Unknown Token',
-              balance: attributes.quantity || '0',
-              valueUSD: value
-            });
-          }
-        }
-      }
-
-      return {
-        nativeBalance: nativeToken || { amount: '0', valueUSD: 0 },
-        tokens: tokens.filter(t => t.address), // Filter out tokens without addresses
-        totalValueUSD
-      };
-
+      const url = this.buildPortfolioUrl(address);
+      const response = await this.makeRequest(url);
+      return this.formatPortfolioData(response);
     } catch (error) {
       console.error('Zerion portfolio error:', error);
       throw error;
     }
   }
 
-  // Optional: Get historical portfolio value
-  async getPortfolioHistory(address: string, period: 'day' | 'week' | 'month' | 'year' = 'day') {
-    const url = new URL(`${this.API_URL}/wallets/${address}/charts`);
+  private buildPortfolioUrl(address: string): URL {
+    const url = new URL(`${this.API_URL}/wallets/${address}/positions/`);
+    url.searchParams.append('filter[positions]', 'no_filter');
     url.searchParams.append('currency', 'usd');
-    url.searchParams.append('period', period);
+    url.searchParams.append('filter[trash]', 'no_filter');
+    url.searchParams.append('sort', 'value');
+    return url;
+  }
 
+  private async makeRequest(url: URL): Promise<any> {
     const response = await fetch(url.toString(), {
       headers: {
         'accept': 'application/json',
-        'authorization': `Basic ${Buffer.from(this.apiKey + ':').toString('base64')}`
+        'authorization': `Basic ${Buffer.from(this.apiKey + ':').toString('base64')}`,
+        'X-Env': 'testnet'
       }
     });
 
-    if (!response.ok) {
-      throw new Error(`Zerion API error: ${response.status}`);
+    const data = await response.json();
+    console.log('Zerion API response:', JSON.stringify(data, null, 2));
+    return data;
+  }
+
+  private formatPortfolioData(data: any): ZerionPortfolio {
+    const positions = data.data || [];
+    let nativeToken = null;
+    const tokens = [];
+
+    for (const position of positions) {
+      if (!position.attributes) continue;
+      const { attributes } = position;
+      
+      const quantity = attributes.quantity?.numeric || '0';
+
+      if (attributes.fungible_info && attributes.fungible_info.name) {
+        const isNativeToken = attributes.fungible_info.implementations?.some(
+          impl => impl.address === null && impl.chain_id.includes('sepolia')
+        );
+
+        if (isNativeToken && attributes.fungible_info.symbol === 'ETH') {
+          nativeToken = {
+            symbol: attributes.fungible_info.symbol,
+            name: attributes.fungible_info.name,
+            balance: quantity
+          };
+        } else {
+          tokens.push({
+            symbol: attributes.fungible_info.symbol || 'UNKNOWN',
+            name: attributes.fungible_info.name || 'Unknown Token',
+            balance: quantity
+          });
+        }
+      }
     }
 
-    return response.json();
+    return {
+      nativeToken,
+      tokens
+    };
+  }
+
+  private processPosition(position: any, value: number, nativeToken: any, tokens: any[]) {
+    const { attributes } = position;
+    if (!attributes.fungible_info?.name) return;
+
+    if (attributes.fungible_info.implementations?.[0]?.address_name === 'ethereum') {
+      nativeToken = {
+        amount: attributes.quantity || '0',
+        valueUSD: value
+      };
+    } else {
+      tokens.push({
+        address: attributes.fungible_info.implementations?.[0]?.address || '',
+        symbol: attributes.fungible_info.symbol || 'UNKNOWN',
+        name: attributes.fungible_info.name || 'Unknown Token',
+        balance: attributes.quantity || '0',
+        valueUSD: value
+      });
+    }
   }
 } 

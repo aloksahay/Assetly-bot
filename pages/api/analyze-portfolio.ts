@@ -23,7 +23,7 @@ export default async function handler(
 
     // Get wallet portfolio from Zerion
     const walletInfo = await zerion.getWalletPortfolio(address, chain);
-
+    return res.status(200).json({ walletInfo });
     // Initialize Brian Agent
     const agent = await createBrianAgent({
       apiKey: process.env.BRIAN_API_KEY!,

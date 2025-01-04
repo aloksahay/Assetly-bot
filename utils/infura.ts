@@ -1,10 +1,10 @@
 import { formatEther, formatUnits } from 'viem';
 
-// Keep only the types and constants we might need later
+// Keep chain IDs and types here
 export const CHAIN_IDS = {
-  'ethereum': 11155111,
-  'arbitrum': 421614,
-  'base': 84531
+  'ethereum': 11155111, // Sepolia
+  'arbitrum': 421614,   // Arbitrum Sepolia
+  'base': 84531        // Base Goerli
 } as const;
 
 export type ChainId = typeof CHAIN_IDS[keyof typeof CHAIN_IDS];

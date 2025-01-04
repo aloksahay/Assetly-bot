@@ -4,33 +4,35 @@ import { ZerionService } from "../../utils/zerion";
 // Initialize Zerion service
 const zerion = new ZerionService(process.env.ZERION_API_KEY!);
 
-// Test wallet address - you can replace this with any address you want to test
-const TEST_WALLET = "0x9a0aAf34B24e8f2A999B23bd033007F17E1DA2ad";
+// Test wallet with known testnet tokens
+const TEST_WALLET = "0x2E1ab5C4D90bE44F0AD9a8077e49Cc8F6e0F9e8A";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   try {
-    console.log('Fetching portfolio for wallet:', TEST_WALLET);
+    console.log('Testing testnet portfolio for:', TEST_WALLET);
     
-    // Get wallet portfolio from Zerion
-    const portfolio = await zerion.getWalletPortfolio(TEST_WALLET);
-
-    console.log('Portfolio response:', {
-      nativeBalance: portfolio.nativeBalance,
-      tokenCount: portfolio.tokens.length,
-      totalValue: portfolio.totalValueUSD
-    });
+    // Test each chain
+    const results = await Promise.all([
+      zerion.getWalletPortfolio(TEST_WALLET, 'ethereum'),  // Sepolia
+      zerion.getWalletPortfolio(TEST_WALLET, 'arbitrum'), // Arbitrum Sepolia
+      zerion.getWalletPortfolio(TEST_WALLET, 'base')      // Base Goerli
+    ]);
 
     return res.status(200).json({
       success: true,
-      data: portfolio,
+      data: {
+        sepolia: results[0],
+        arbitrumSepolia: results[1],
+        baseGoerli: results[2]
+      },
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Portfolio fetch error:', error);
+    console.error('Portfolio test error:', error);
     return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 
