@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { ethers } from 'ethers'
 import { EDUCHAIN_CONFIG } from '@/utils/constants'
+import { PortfolioManager, PortfolioRecommendation } from '@/utils/portfolio-manager'
 
 const SUBSCRIPTION_ADDRESS = process.env.NEXT_PUBLIC_SUBSCRIPTION_ADDRESS!
 
@@ -11,6 +12,7 @@ export function useWallet() {
   const [error, setError] = useState<string>('')
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [analysisResults, setAnalysisResults] = useState<any>(null)
+  const [recommendations, setRecommendations] = useState<PortfolioRecommendation[]>([])
 
   const fetchBalance = useCallback(async (address: string) => {
     try {
@@ -144,6 +146,7 @@ export function useWallet() {
     
     setLoading(true)
     setError('')
+    setRecommendations([]) // Clear previous recommendations
 
     try {
       const response = await fetch('/api/analyze-portfolio', {
@@ -153,7 +156,7 @@ export function useWallet() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to analyze portfolio')
+        throw new Error('Failed to fetch portfolio')
       }
 
       const data = await response.json()
@@ -175,6 +178,9 @@ export function useWallet() {
     connectWallet,
     sendTransaction,
     analyzePortfolio,
-    analysisResults
+    analysisResults,
+    recommendations,
+    setRecommendations,
+    setError
   }
 } 
