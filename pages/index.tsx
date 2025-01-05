@@ -2,6 +2,15 @@ import { Button } from "@/components/ui/button"
 import { useWallet } from "@/hooks/useWallet"
 import { EDUCHAIN_CONFIG } from "@/utils/constants"
 
+interface Asset {
+  symbol: string
+  name: string
+  quantity: string
+  valueUSD: number | null
+  isNative: boolean
+  displayable: boolean
+}
+
 export default function HomePage() {
   const { 
     address, 
@@ -11,8 +20,32 @@ export default function HomePage() {
     isSubscribed,
     connectWallet, 
     sendTransaction,
-    analyzePortfolio 
+    analyzePortfolio,
+    analysisResults
   } = useWallet()
+
+  // Format assets from Zerion response
+  const formatAssets = (data: any): Asset[] => {
+    if (!data?.data) return []
+    
+    return data.data
+      .filter((position: any) => 
+        // Only include displayable assets that aren't trash
+        position.attributes.flags.displayable && !position.attributes.flags.is_trash
+      )
+      .map((position: any) => ({
+        symbol: position.attributes.fungible_info.symbol,
+        name: position.attributes.fungible_info.name,
+        quantity: position.attributes.quantity.numeric,
+        valueUSD: position.attributes.value,
+        isNative: position.attributes.fungible_info.implementations.some(
+          (impl: any) => impl.address === null
+        ),
+        displayable: position.attributes.flags.displayable
+      }))
+  }
+
+  const assets = analysisResults ? formatAssets(analysisResults) : []
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -77,6 +110,68 @@ export default function HomePage() {
                 </Button>
               )}
             </div>
+          </div>
+        )}
+        {address && analysisResults && (
+          <div className="mt-6 bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-medium mb-4">Portfolio Analysis</h2>
+            {assets.length > 0 ? (
+              <div className="space-y-4">
+                {/* Native Assets Section */}
+                <div>
+                  <h3 className="text-md font-medium text-slate-700 mb-2">Native Assets</h3>
+                  {assets.filter(a => a.isNative).map((asset, idx) => (
+                    <div key={`native-${idx}`} className="flex justify-between items-center py-2">
+                      <div>
+                        <p className="font-medium">{asset.symbol}</p>
+                        <p className="text-sm text-slate-500">{asset.name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">
+                          {parseFloat(asset.quantity).toFixed(4)} {asset.symbol}
+                        </p>
+                        {asset.valueUSD !== null && (
+                          <p className="text-sm text-slate-500">
+                            ${asset.valueUSD.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tokens Section */}
+                <div>
+                  <h3 className="text-md font-medium text-slate-700 mb-2">Tokens</h3>
+                  {assets.filter(a => !a.isNative).map((asset, idx) => (
+                    <div key={`token-${idx}`} className="flex justify-between items-center py-2">
+                      <div>
+                        <p className="font-medium">{asset.symbol}</p>
+                        <p className="text-sm text-slate-500">{asset.name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">
+                          {parseFloat(asset.quantity).toFixed(4)} {asset.symbol}
+                        </p>
+                        {asset.valueUSD !== null && (
+                          <p className="text-sm text-slate-500">
+                            ${asset.valueUSD.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-slate-500">No assets found in this wallet.</p>
+            )}
           </div>
         )}
       </main>

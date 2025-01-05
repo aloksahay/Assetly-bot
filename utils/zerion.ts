@@ -1,102 +1,61 @@
-import { TokenBalance, CombinedPortfolio } from './types';
-import { TESTNET_CHAINS } from './constants';
+const ZERION_API_KEY = process.env.ZERION_API_KEY!
 
 export class ZerionService {
-  private readonly API_URL = 'https://api.zerion.io/v1';
-
-  constructor(private apiKey: string) {
-    if (!apiKey) throw new Error('Zerion API key is required');
+  private baseUrl = 'https://api.zerion.io/v1'
+  private headers = {
+    'accept': 'application/json',
+    'authorization': `Basic ${Buffer.from(ZERION_API_KEY + ':').toString('base64')}`,
+    'X-Env': 'testnet'
   }
 
-  async getWalletPortfolio(address: string, chain?: string): Promise<CombinedPortfolio> {
+  async getWalletPositions(address: string) {
     try {
-      const url = this.buildPortfolioUrl(address);
-      const response = await this.makeRequest(url);
-      return this.formatPortfolioData(response);
+      // Log request details for debugging
+      console.log('Requesting positions for address:', address)
+      console.log('Using headers:', this.headers)
+
+      // Ensure the address is in lowercase
+      const formattedAddress = address.toLowerCase()
+
+      // Match exact URL structure from curl command
+      const url = new URL(`${this.baseUrl}/wallets/${formattedAddress}/positions/`)
+      url.searchParams.append('filter[positions]', 'only_simple')
+      url.searchParams.append('currency', 'usd')
+      url.searchParams.append('filter[trash]', 'no_filter')
+      url.searchParams.append('sort', 'value')
+
+      // Log full URL
+      console.log('Request URL:', url.toString())
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: this.headers
+      })
+
+      // Log raw response for debugging
+      const rawText = await response.text()
+      console.log('Raw response:', rawText)
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} - ${rawText}`)
+      }
+
+      // Try parsing the response text
+      let data
+      try {
+        data = JSON.parse(rawText)
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError)
+        throw new Error('Invalid response format from Zerion API')
+      }
+
+      // Log parsed data
+      console.log('Parsed response:', data)
+      return data
+
     } catch (error) {
-      console.error('Zerion portfolio error:', error);
-      throw error;
-    }
-  }
-
-  private buildPortfolioUrl(address: string): URL {
-    const url = new URL(`${this.API_URL}/wallets/${address}/positions/`);
-    url.searchParams.append('filter[positions]', 'no_filter');
-    url.searchParams.append('currency', 'usd');
-    url.searchParams.append('filter[trash]', 'no_filter');
-    url.searchParams.append('sort', 'value');
-    return url;
-  }
-
-  private async makeRequest(url: URL): Promise<any> {
-    const response = await fetch(url.toString(), {
-      headers: {
-        'accept': 'application/json',
-        'authorization': `Basic ${Buffer.from(this.apiKey + ':').toString('base64')}`,
-        'X-Env': 'testnet'
-      }
-    });
-
-    const data = await response.json();
-    console.log('Zerion API response:', JSON.stringify(data, null, 2));
-    return data;
-  }
-
-  private formatPortfolioData(data: any): CombinedPortfolio {
-    const positions = data.data || [];
-    let nativeToken = null;
-    const tokens = [];
-
-    for (const position of positions) {
-      if (!position.attributes) continue;
-      const { attributes } = position;
-      
-      const quantity = attributes.quantity?.numeric || '0';
-
-      if (attributes.fungible_info && attributes.fungible_info.name) {
-        const isNativeToken = attributes.fungible_info.implementations?.some(
-          impl => impl.address === null && impl.chain_id.includes('sepolia')
-        );
-
-        if (isNativeToken && attributes.fungible_info.symbol === 'ETH') {
-          nativeToken = {
-            symbol: attributes.fungible_info.symbol,
-            name: attributes.fungible_info.name,
-            balance: quantity
-          };
-        } else {
-          tokens.push({
-            symbol: attributes.fungible_info.symbol || 'UNKNOWN',
-            name: attributes.fungible_info.name || 'Unknown Token',
-            balance: quantity
-          });
-        }
-      }
-    }
-
-    return {
-      nativeToken,
-      tokens
-    };
-  }
-
-  private processPosition(position: any, value: number, nativeToken: any, tokens: any[]) {
-    const { attributes } = position;
-    if (!attributes.fungible_info?.name) return;
-
-    if (attributes.fungible_info.implementations?.[0]?.address_name === 'ethereum') {
-      nativeToken = {
-        amount: attributes.quantity || '0',
-        valueUSD: value
-      };
-    } else {
-      tokens.push({
-        address: attributes.fungible_info.implementations?.[0]?.address || '',
-        symbol: attributes.fungible_info.symbol || 'UNKNOWN',
-        name: attributes.fungible_info.name || 'Unknown Token',
-        balance: attributes.quantity || '0',
-        valueUSD: value
-      });
+      console.error('Zerion request failed:', error)
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch wallet positions')
     }
   }
 } 

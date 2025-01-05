@@ -10,6 +10,7 @@ export function useWallet() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
   const [isSubscribed, setIsSubscribed] = useState(false)
+  const [analysisResults, setAnalysisResults] = useState<any>(null)
 
   const fetchBalance = useCallback(async (address: string) => {
     try {
@@ -25,21 +26,34 @@ export function useWallet() {
     try {
       const provider = new ethers.JsonRpcProvider(EDUCHAIN_CONFIG.rpcUrls[0])
       
-      const filter = {
-        address: SUBSCRIPTION_ADDRESS,
-        fromBlock: -100,
-        toBlock: 'latest'
-      }
-
-      const logs = await provider.getLogs(filter)
+      // Get transactions sent to subscription address
+      const filter = await provider.getBalance(SUBSCRIPTION_ADDRESS)
       
-      const hasSubscribed = logs.some(log => 
-        log.topics.includes(walletAddress.toLowerCase())
+      // Get transaction history
+      const history = await provider.getHistory(walletAddress)
+      
+      // Check if any transaction was sent to subscription address with correct amount
+      const hasSubscribed = history.some(tx => 
+        tx.to?.toLowerCase() === SUBSCRIPTION_ADDRESS.toLowerCase() &&
+        tx.value === ethers.parseUnits('0.001', 'ether')
       )
 
       setIsSubscribed(hasSubscribed)
+      
+      // Also check localStorage as backup
+      if (!hasSubscribed) {
+        const storedSubscription = localStorage.getItem(`subscription_${walletAddress.toLowerCase()}`)
+        if (storedSubscription) {
+          setIsSubscribed(true)
+        }
+      }
     } catch (err) {
       console.error('Error checking subscription:', err)
+      // Fallback to localStorage if blockchain check fails
+      const storedSubscription = localStorage.getItem(`subscription_${walletAddress.toLowerCase()}`)
+      if (storedSubscription) {
+        setIsSubscribed(true)
+      }
     }
   }, [])
 
@@ -113,8 +127,10 @@ export function useWallet() {
       })
 
       await tx.wait()
-      fetchBalance(address)
+      await fetchBalance(address)
       setIsSubscribed(true)
+      // Store subscription status in localStorage
+      localStorage.setItem(`subscription_${address.toLowerCase()}`, 'true')
       alert('Subscription successful!')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Transaction failed')
@@ -141,7 +157,7 @@ export function useWallet() {
       }
 
       const data = await response.json()
-      console.log('Portfolio analysis:', data)
+      setAnalysisResults(data.positions)
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
@@ -158,6 +174,7 @@ export function useWallet() {
     isSubscribed,
     connectWallet,
     sendTransaction,
-    analyzePortfolio
+    analyzePortfolio,
+    analysisResults
   }
 } 
