@@ -1,19 +1,9 @@
 import { Button } from "@/components/ui/button"
 import { useWallet } from "@/hooks/useWallet"
 import { EDUCHAIN_CONFIG } from "@/utils/constants"
-import { PortfolioManager } from "@/utils/portfolio-manager"
 import { useState } from 'react'
-import { AaveService } from '@/utils/aave'
-import { ethers } from 'ethers'
-
-interface Asset {
-  symbol: string
-  name: string
-  quantity: string
-  valueUSD: number | null
-  isNative: boolean
-  displayable: boolean
-}
+import { AaveService } from "@/utils/aave"
+import { ethers } from "ethers"
 
 export default function HomePage() {
   const { 
@@ -34,7 +24,7 @@ export default function HomePage() {
   const [rawResponse, setRawResponse] = useState<string>('')
 
   // Format assets from Zerion response
-  const formatAssets = (data: any): Asset[] => {
+  const formatAssets = (data: any) => {
     if (!data?.data) return []
     
     return data.data
@@ -56,19 +46,19 @@ export default function HomePage() {
   const assets = analysisResults ? formatAssets(analysisResults) : []
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
+      <header className="sticky top-0 z-50 w-full border-b border-gray-800 backdrop-blur-sm bg-gray-900/75">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-slate-900">
+              <h1 className="text-xl font-medium bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
                 Assetly: Your DeFi Agent
               </h1>
             </div>
 
             <div className="flex items-center gap-4">
               {address && balance && (
-                <div className="text-sm text-slate-600">
+                <div className="text-sm text-gray-300">
                   <span className="font-medium">{parseFloat(balance).toFixed(4)} EDU</span>
                 </div>
               )}
@@ -76,7 +66,7 @@ export default function HomePage() {
                 variant="outline"
                 onClick={connectWallet}
                 disabled={loading}
-                className="font-medium"
+                className="rounded-full bg-gradient-to-r from-blue-500 to-violet-500 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
               >
                 {loading ? 'Connecting...' : address ? `${address.slice(0,6)}...${address.slice(-4)}` : 'Connect Wallet'}
               </Button>
@@ -85,41 +75,46 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 space-y-6">
         {error && (
-          <div className="text-red-500 mb-4">
+          <div className="rounded-lg bg-red-500/10 p-4 text-red-400 border border-red-500/20">
             {error}
           </div>
         )}
+
         {address && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-medium mb-4">Wallet Details</h2>
-            <div className="space-y-2">
+          <div className="rounded-xl bg-gray-800/50 shadow-xl backdrop-blur-sm border border-gray-700/50 p-6">
+            <h2 className="text-lg font-medium mb-4 text-white">Wallet Details</h2>
+            <div className="space-y-2 text-gray-300">
               <p><span className="font-medium">Address:</span> {address}</p>
               <p><span className="font-medium">Balance:</span> {balance} EDU</p>
               <p><span className="font-medium">Network:</span> {EDUCHAIN_CONFIG.chainName}</p>
             </div>
             <div className="flex gap-4 mt-4">
-              {!isSubscribed ? (
+              {!isSubscribed && (
                 <Button 
                   variant="default"
                   onClick={sendTransaction}
                   disabled={loading}
+                  className="bg-gradient-to-r from-blue-500 to-violet-500 text-white rounded-lg hover:opacity-90 transition-opacity"
                 >
                   Subscribe (0.001 EDU)
                 </Button>
-              ) : null}
+              )}
             </div>
           </div>
         )}
+
+        {/* Portfolio Analysis Section */}
         {address && (
-          <div className="mt-6 bg-white rounded-lg shadow p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-medium">Portfolio Analysis</h2>
+          <div className="rounded-xl bg-gray-800/50 shadow-xl backdrop-blur-sm border border-gray-700/50 p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-medium text-white">Portfolio Analysis</h2>
               <Button
                 variant="outline"
                 onClick={analyzePortfolio}
                 disabled={loading}
+                className="bg-white/10 text-white hover:bg-white/20 rounded-lg border-0 transition-colors"
               >
                 {loading ? 'Analyzing...' : 'Analyze Portfolio'}
               </Button>
@@ -127,10 +122,10 @@ export default function HomePage() {
 
             {analysisResults && assets.length > 0 ? (
               <>
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {/* Native Assets Section */}
-                  <div>
-                    <h3 className="text-md font-medium text-slate-700 mb-2">Native Assets</h3>
+                  <div className="rounded-lg bg-gray-900/50 p-4">
+                    <h3 className="text-md font-medium text-gray-300 mb-4">Native Assets</h3>
                     {assets.filter(a => a.isNative).map((asset, idx) => (
                       <div key={`native-${idx}`} className="flex justify-between items-center py-2">
                         <div>
@@ -155,8 +150,8 @@ export default function HomePage() {
                   </div>
 
                   {/* Tokens Section */}
-                  <div>
-                    <h3 className="text-md font-medium text-slate-700 mb-2">Tokens</h3>
+                  <div className="rounded-lg bg-gray-900/50 p-4">
+                    <h3 className="text-md font-medium text-gray-300 mb-4">Tokens</h3>
                     {assets.filter(a => !a.isNative).map((asset, idx) => (
                       <div key={`token-${idx}`} className="flex justify-between items-center py-2">
                         <div>
@@ -177,7 +172,6 @@ export default function HomePage() {
                               </p>
                             )}
                           </div>
-                          {/* Add Deposit to AAVE button */}
                           {asset.symbol === 'USDC' && (
                             <Button
                               variant="outline"
@@ -202,9 +196,8 @@ export default function HomePage() {
                                   const testAmount = ethers.parseUnits("1.0", 6) // 1 USDC with 6 decimals
                                   console.log('Attempting to deposit 1 USDC...')
                                   
-                                  // Get transaction
                                   const tx = await aave.deposit(
-                                    testAmount,
+                                    testAmount.toString(),
                                     signer
                                   )
 
@@ -230,7 +223,7 @@ export default function HomePage() {
                 </div>
 
                 {/* Get Recommendations Button */}
-                <div className="mt-6 pt-4 border-t border-slate-100">
+                <div className="mt-6 pt-6 border-t border-gray-700">
                   <Button
                     variant="default"
                     onClick={async () => {
@@ -256,23 +249,25 @@ export default function HomePage() {
                       }
                     }}
                     disabled={loading}
-                    className="w-full"
+                    className="w-full bg-gradient-to-r from-blue-500 to-violet-500 text-white rounded-lg hover:opacity-90 transition-opacity"
                   >
                     Get Recommendations
                   </Button>
                 </div>
               </>
             ) : (
-              <p className="text-slate-500">
+              <p className="text-gray-400 text-center py-8">
                 {loading ? 'Loading portfolio...' : 'Click Analyze Portfolio to view your assets'}
               </p>
             )}
           </div>
         )}
+
+        {/* Raw Response Section */}
         {rawResponse && (
-          <div className="mt-6 bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-medium mb-4">AI Response</h2>
-            <pre className="bg-slate-50 p-4 rounded overflow-auto max-h-[500px] text-sm">
+          <div className="rounded-xl bg-gray-800/50 shadow-xl backdrop-blur-sm border border-gray-700/50 p-6">
+            <h2 className="text-lg font-medium mb-4 text-white">AI Response</h2>
+            <pre className="bg-gray-900/50 p-4 rounded-lg overflow-auto max-h-[500px] text-sm text-gray-300 border border-gray-700/50">
               {rawResponse}
             </pre>
           </div>

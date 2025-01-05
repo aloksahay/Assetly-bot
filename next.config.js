@@ -1,15 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  webpack: (config) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      net: false,
-      tls: false,
-      fs: false,
-    };
-    return config;
-  },
-};
+  transpilePackages: ["@radix-ui/react-slot"],
+}
 
-module.exports = nextConfig; 
+module.exports = nextConfig 

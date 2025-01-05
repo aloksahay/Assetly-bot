@@ -18,6 +18,9 @@ export class AaveService {
   private pool: ethers.Contract
 
   constructor(provider: ethers.Provider) {
+    if (!provider) {
+      throw new Error('Provider is required')
+    }
     this.provider = provider
     this.pool = new ethers.Contract(AAVE_ADDRESSES.POOL, AAVE_POOL_ABI, provider)
   }
@@ -26,11 +29,14 @@ export class AaveService {
     amount: string,
     signer: ethers.Signer
   ) {
+    if (!amount || !signer) {
+      throw new Error('Amount and signer are required')
+    }
+
     try {
       const poolWithSigner = this.pool.connect(signer)
       
       console.log('Approving AAVE to spend USDC...')
-      // First approve AAVE to spend tokens
       const erc20 = new ethers.Contract(
         AAVE_ADDRESSES.USDC,
         ['function approve(address spender, uint256 amount) returns (bool)'],
@@ -42,12 +48,11 @@ export class AaveService {
       console.log('Approval successful')
 
       console.log('Depositing to AAVE...')
-      // Then deposit into AAVE
       const depositTx = await poolWithSigner.supply(
-        AAVE_ADDRESSES.USDC,  // asset (USDC)
-        amount,               // amount
-        await signer.getAddress(), // onBehalfOf
-        0                    // referralCode
+        AAVE_ADDRESSES.USDC,
+        amount,
+        await signer.getAddress(),
+        0
       )
 
       console.log('Waiting for deposit confirmation...')
@@ -63,6 +68,9 @@ export class AaveService {
   }
 
   async getUserData(address: string) {
+    if (!address) {
+      throw new Error('Address is required')
+    }
     return this.pool.getUserAccountData(address)
   }
 } 
