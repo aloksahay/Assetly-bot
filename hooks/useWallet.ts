@@ -13,6 +13,8 @@ export function useWallet() {
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [analysisResults, setAnalysisResults] = useState<any>(null)
   const [recommendations, setRecommendations] = useState<PortfolioRecommendation[]>([])
+  const [chainId, setChainId] = useState<string>('')
+  const [alert, setAlert] = useState<{ message: string; variant: 'success' | 'error' } | null>(null)
 
   const fetchBalance = useCallback(async (address: string) => {
     try {
@@ -66,6 +68,16 @@ export function useWallet() {
     }
   }, [address, fetchBalance, checkSubscription])
 
+  const disconnect = useCallback(() => {
+    setAddress('')
+    setBalance('')
+    setIsSubscribed(false)
+    setAnalysisResults(null)
+    setRecommendations([])
+    setChainId('')
+    localStorage.removeItem('walletConnected')
+  }, [])
+
   const connectWallet = useCallback(async () => {
     setLoading(true)
     setError('')
@@ -81,6 +93,10 @@ export function useWallet() {
 
       const address = accounts[0]
       setAddress(address)
+
+      // Get chain ID
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' })
+      setChainId(chainId)
 
       try {
         await window.ethereum.request({
@@ -133,9 +149,11 @@ export function useWallet() {
       setIsSubscribed(true)
       // Store subscription status in localStorage
       localStorage.setItem(`subscription_${address.toLowerCase()}`, 'true')
-      alert('Subscription successful!')
+      setAlert({ message: 'Subscription successful!', variant: 'success' })
+      setTimeout(() => setAlert(null), 3000) // Hide after 3 seconds
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Transaction failed')
+      setAlert({ message: err instanceof Error ? err.message : 'Transaction failed', variant: 'error' })
+      setTimeout(() => setAlert(null), 3000)
     } finally {
       setLoading(false)
     }
@@ -169,6 +187,27 @@ export function useWallet() {
     }
   }, [address])
 
+  const unsubscribe = useCallback(async () => {
+    if (!window.ethereum || !address) {
+      setError('Please connect your wallet first')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      // Remove subscription status from localStorage
+      localStorage.removeItem(`subscription_${address.toLowerCase()}`)
+      setIsSubscribed(false)
+      alert('Unsubscribed successfully!')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to unsubscribe')
+    } finally {
+      setLoading(false)
+    }
+  }, [address])
+
   return {
     address,
     balance,
@@ -181,6 +220,10 @@ export function useWallet() {
     analysisResults,
     recommendations,
     setRecommendations,
-    setError
+    setError,
+    unsubscribe,
+    chainId,
+    disconnect,
+    alert
   }
 } 
