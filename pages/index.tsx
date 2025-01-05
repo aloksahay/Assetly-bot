@@ -3,7 +3,16 @@ import { useWallet } from "@/hooks/useWallet"
 import { EDUCHAIN_CONFIG } from "@/utils/constants"
 
 export default function HomePage() {
-  const { address, balance, loading, error, connectWallet } = useWallet()
+  const { 
+    address, 
+    balance, 
+    loading, 
+    error, 
+    isSubscribed,
+    connectWallet, 
+    sendTransaction,
+    analyzePortfolio 
+  } = useWallet()
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -48,6 +57,25 @@ export default function HomePage() {
               <p><span className="font-medium">Address:</span> {address}</p>
               <p><span className="font-medium">Balance:</span> {balance} EDU</p>
               <p><span className="font-medium">Network:</span> {EDUCHAIN_CONFIG.chainName}</p>
+            </div>
+            <div className="flex gap-4 mt-4">
+              {!isSubscribed ? (
+                <Button 
+                  variant="default"
+                  onClick={sendTransaction}
+                  disabled={loading}
+                >
+                  Subscribe (0.001 EDU)
+                </Button>
+              ) : (
+                <Button
+                  variant="default"
+                  onClick={analyzePortfolio}
+                  disabled={loading}
+                >
+                  Analyze Portfolio
+                </Button>
+              )}
             </div>
           </div>
         )}
