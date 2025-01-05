@@ -1,4 +1,4 @@
-import { ZerionPortfolio } from './types';
+import { TokenBalance, CombinedPortfolio } from './types';
 import { TESTNET_CHAINS } from './constants';
 
 export class ZerionService {
@@ -8,7 +8,7 @@ export class ZerionService {
     if (!apiKey) throw new Error('Zerion API key is required');
   }
 
-  async getWalletPortfolio(address: string, chain?: string): Promise<ZerionPortfolio> {
+  async getWalletPortfolio(address: string, chain?: string): Promise<CombinedPortfolio> {
     try {
       const url = this.buildPortfolioUrl(address);
       const response = await this.makeRequest(url);
@@ -42,7 +42,7 @@ export class ZerionService {
     return data;
   }
 
-  private formatPortfolioData(data: any): ZerionPortfolio {
+  private formatPortfolioData(data: any): CombinedPortfolio {
     const positions = data.data || [];
     let nativeToken = null;
     const tokens = [];

@@ -1,10 +1,30 @@
-import { NextApiRequest, NextApiResponse } from "next";
-import { createBrianAgent } from "@brian-ai/langchain";
-import { ChatOpenAI } from "@langchain/openai";
-import { ZerionService } from "../../utils/zerion";
+import { NextApiRequest, NextApiResponse } from 'next';
+import { ethers } from 'ethers';
+import { RPC_URLS } from '../../utils/constants';
 
-// Initialize services
-const zerion = new ZerionService(process.env.ZERION_API_KEY!);
+// Common ERC20 ABI for balanceOf
+const ERC20_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function symbol() view returns (string)',
+  'function name() view returns (string)',
+  'function decimals() view returns (uint8)'
+];
+
+// List of tokens we want to track
+const TOKENS = [
+  {
+    address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    symbol: 'USDC',
+    name: 'USD Coin',
+    decimals: 6
+  },
+  {
+    address: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
+    symbol: 'LINK',
+    name: 'Chainlink',
+    decimals: 18
+  }
+];
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,68 +35,50 @@ export default async function handler(
   }
 
   try {
-    const { address, chain = 'ethereum' } = req.body;
+    const { address } = req.body;
+    const provider = new ethers.JsonRpcProvider(RPC_URLS.ethereum);
 
-    if (!address) {
-      return res.status(400).json({ error: 'Address is required' });
-    }
-
-    // Get wallet portfolio from Zerion
-    const walletInfo = await zerion.getWalletPortfolio(address, chain);
-    return res.status(200).json({ walletInfo });
-    // Initialize Brian Agent
-    const agent = await createBrianAgent({
-      apiKey: process.env.BRIAN_API_KEY!,
-      privateKeyOrAccount: process.env.AGENT_PRIVATE_KEY! as `0x${string}`,
-      llm: new ChatOpenAI({ apiKey: process.env.OPENAI_API_KEY })
-    });
-
-    // Format portfolio data for analysis
-    const portfolioSummary = `
-      Portfolio Value (Testnet): $${walletInfo.totalValueUSD.toFixed(2)}
-      Native Balance: ${walletInfo.nativeBalance.amount} (${chain} testnet) ($${walletInfo.nativeBalance.valueUSD.toFixed(2)})
-      Tokens: ${walletInfo.tokens.map(t => 
-        `\n- ${t.symbol}: ${t.balance} ($${t.valueUSD.toFixed(2)})`
-      ).join('')}
-    `;
-
-    // Get DeFi strategy recommendations
-    const defiStrategy = await agent.invoke({
-      input: `Analyze this portfolio and suggest optimal DeFi strategies:
-        ${portfolioSummary}
+    // Get ETH balance
+    const ethBalance = await provider.getBalance(address);
+    
+    // Get token balances
+    const tokenBalances = await Promise.all(
+      TOKENS.map(async (token) => {
+        const contract = new ethers.Contract(
+          token.address,
+          ERC20_ABI,
+          provider
+        );
+        const balance = await contract.balanceOf(address);
+        const formattedBalance = ethers.formatUnits(balance, token.decimals);
         
-        Provide:
-        1. Portfolio Analysis
-        - Asset allocation overview
-        - Risk assessment
-        - Major opportunities
-        
-        2. DeFi Opportunities
-        - Best yield farming positions
-        - Lending opportunities
-        - Liquidity provision options
-        
-        3. Risk Management
-        - Diversification suggestions
-        - Risk mitigation strategies
-        - Protocol exposure recommendations`,
-      metadata: { address, chain }
-    });
+        return {
+          symbol: token.symbol,
+          name: token.name,
+          balance: formattedBalance
+        };
+      })
+    );
+
+    // Filter out zero balances
+    const nonZeroTokens = tokenBalances.filter(
+      token => parseFloat(token.balance) > 0
+    );
 
     return res.status(200).json({
-      currentPortfolio: {
-        walletInfo,
-        timestamp: new Date().toISOString()
+      nativeToken: {
+        symbol: 'ETH',
+        name: 'Ethereum',
+        balance: ethers.formatEther(ethBalance)
       },
-      analysis: {
-        defiStrategy,
-        chain,
-        address
-      }
+      tokens: nonZeroTokens
     });
 
   } catch (error) {
-    console.error('Analysis Error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Portfolio analysis failed:', error);
+    return res.status(500).json({ 
+      error: 'Failed to analyze portfolio',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 } 
