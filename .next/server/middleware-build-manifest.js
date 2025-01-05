@@ -8,7 +8,6 @@ self.__BUILD_MANIFEST = {
   "ampDevFiles": [],
   "lowPriorityFiles": [],
   "rootMainFiles": [],
-  "rootMainFilesTree": {},
   "pages": {
     "/_app": [
       "static/chunks/webpack.js",
@@ -19,11 +18,6 @@ self.__BUILD_MANIFEST = {
       "static/chunks/webpack.js",
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
-    ],
-    "/test-brian": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/test-brian.js"
     ]
   },
   "ampFirstPages": []
