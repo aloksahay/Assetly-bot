@@ -13,3 +13,15 @@ export const RPC_URLS = {
 
 export type ChainId = typeof CHAIN_IDS[keyof typeof CHAIN_IDS];
 export type ChainName = keyof typeof CHAIN_IDS; 
+
+export const EDUCHAIN_CONFIG = {
+  chainId: '0xA045C', // 656476 in hex
+  chainName: 'Open Campus Codex',
+  rpcUrls: ['https://rpc.open-campus-codex.gelato.digital'],
+  nativeCurrency: {
+    name: 'EDU',
+    symbol: 'EDU',
+    decimals: 18
+  },
+  blockExplorerUrls: ['https://opencampus-codex.blockscout.com/']
+} as const 
