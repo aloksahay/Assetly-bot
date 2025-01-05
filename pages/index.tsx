@@ -6,6 +6,7 @@ import { AaveService } from "@/utils/aave"
 import { ethers } from "ethers"
 import { Terminal } from '@/components/Terminal'
 import { Alert } from "@/components/ui/alert"
+import { DepositModal } from '@/components/DepositModal'
 
 export default function HomePage() {
   const { 
@@ -30,6 +31,12 @@ export default function HomePage() {
 
   const [rawResponse, setRawResponse] = useState<string>('')
   const [logs, setLogs] = useState<Array<{ message: string; timestamp: string; type?: 'info' | 'error' | 'success' }>>([])
+  const [depositModal, setDepositModal] = useState<{
+    isOpen: boolean;
+    symbol: string;
+    balance: string;
+  } | null>(null);
+  const [isDepositing, setIsDepositing] = useState(false)
 
   const addLog = (message: string, type?: 'info' | 'error' | 'success') => {
     setLogs(prev => [...prev, {
@@ -40,12 +47,12 @@ export default function HomePage() {
   }
 
   const handleAnalyzePortfolio = async () => {
-    addLog('Analyzing portfolio with Zerion API...')
+    addLog('Starting portfolio inspection with Zerion API...')
     try {
       await analyzePortfolio()
-      addLog('Portfolio analysis complete', 'success')
+      addLog('Portfolio inspection complete', 'success')
     } catch (err) {
-      addLog(`Analysis failed: ${err}`, 'error')
+      addLog(`Inspection failed: ${err}`, 'error')
     }
   }
 
@@ -85,7 +92,7 @@ export default function HomePage() {
     
     return data.data
       .filter((position: any) => 
-        position.attributes.flags.displayable && !position.attributes.flags.is_trash
+        !position.attributes.flags.is_trash
       )
       .map((position: any) => ({
         symbol: position.attributes.fungible_info.symbol,
@@ -100,6 +107,94 @@ export default function HomePage() {
   }
 
   const assets = analysisResults ? formatAssets(analysisResults) : []
+
+  const handleDeposit = async (amount: string) => {
+    setIsDepositing(true)
+    addLog(`Initiating deposit of ${amount} ${depositModal?.symbol} to AAVE...`)
+    try {
+      if (!window.ethereum) throw new Error('Please install MetaMask')
+
+      // Request network change first
+      addLog('Switching to Sepolia network...')
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0xaa36a7' }], // Sepolia
+        })
+        addLog('Successfully switched to Sepolia', 'success')
+      } catch (switchError: any) {
+        if (switchError.code === 4902) {
+          addLog('Adding Sepolia network...')
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0xaa36a7',
+              chainName: 'Sepolia',
+              nativeCurrency: {
+                name: 'Sepolia ETH',
+                symbol: 'ETH',
+                decimals: 18
+              },
+              rpcUrls: ['https://sepolia.infura.io/v3/']
+            }]
+          })
+          addLog('Successfully added Sepolia network', 'success')
+        } else {
+          throw switchError
+        }
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const signer = await provider.getSigner()
+      const aave = new AaveService(provider)
+      
+      const decimals = depositModal?.symbol === 'USDC' ? 6 : 18
+      const depositAmount = ethers.parseUnits(Number(amount).toFixed(2), decimals)
+      
+      addLog('Approving AAVE to spend tokens...')
+      const tx = await aave.deposit(
+        depositAmount.toString(),
+        signer
+      )
+
+      addLog('Waiting for deposit confirmation...')
+      await tx.wait()
+      addLog('Deposit successful!', 'success')
+      setDepositModal(null)
+
+      // Refresh both portfolio and recommendations
+      addLog('Refreshing portfolio data...')
+      await handleAnalyzePortfolio()
+      
+      // If we have existing recommendations, refresh them
+      if (rawResponse) {
+        addLog('Updating yield recommendations...')
+        try {
+          const response = await fetch('/api/get-recommendations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portfolioData: analysisResults.data })
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to get recommendations');
+          }
+
+          const data = await response.json();
+          addLog('Updated Assetly recommendations after deposit', 'success')
+          setRawResponse(JSON.stringify(data, null, 2));
+        } catch (err) {
+          addLog(`Failed to update recommendations: ${err}`, 'error')
+        }
+      }
+      
+    } catch (err) {
+      addLog(`Deposit failed: ${err}`, 'error')
+      setError(err instanceof Error ? err.message : 'Failed to deposit')
+    } finally {
+      setIsDepositing(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
@@ -162,11 +257,11 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Portfolio Analysis Section */}
+        {/* Portfolio Inspection Section */}
         {address && isSubscribed && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-medium text-white">Portfolio Analysis</h2>
+              <h2 className="text-lg font-medium text-white">Portfolio Inspection</h2>
               <div className="flex gap-4">
                 <Button
                   variant="outline"
@@ -205,10 +300,7 @@ export default function HomePage() {
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-white">
-                            {Number(asset.quantity).toLocaleString(undefined, {
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: 2
-                            })} {asset.symbol}
+                            {Number(asset.quantity).toFixed(2)} {asset.symbol}
                           </p>
                           {asset.valueUSD !== null && (
                             <p className="text-sm text-gray-300">
@@ -236,10 +328,7 @@ export default function HomePage() {
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-white">
-                            {Number(asset.quantity).toLocaleString(undefined, {
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: 2
-                            })} {asset.symbol}
+                            {Number(asset.quantity).toFixed(2)} {asset.symbol}
                           </p>
                           {asset.valueUSD !== null && (
                             <p className="text-sm text-gray-300">
@@ -261,7 +350,8 @@ export default function HomePage() {
                     variant="default"
                     className="w-full bg-gradient-to-r from-blue-500 to-violet-500 text-white rounded-lg hover:scale-[1.02] hover:shadow-lg transition-all duration-200"
                     onClick={async () => {
-                      addLog('Fetching recommendations on AAVE V3 and Compound...')
+                      addLog('Fetching recommendations based on portfolio inspection...')
+                      addLog('Assetly analyzing portfolio for optimal yield and risk strategies...', 'info')
                       try {
                         const response = await fetch('/api/get-recommendations', {
                           method: 'POST',
@@ -274,7 +364,7 @@ export default function HomePage() {
                         }
 
                         const data = await response.json();
-                        addLog('Recommendations fetched successfully', 'success')
+                        addLog('Assetly recommends AAVE for optimal risk-adjusted yield', 'success')
                         setRawResponse(JSON.stringify(data, null, 2));
                       } catch (err) {
                         addLog(`Failed to get recommendations: ${err}`, 'error')
@@ -298,7 +388,7 @@ export default function HomePage() {
         {/* Show message when not subscribed */}
         {address && !isSubscribed && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 text-center">
-            <p className="text-gray-300 mb-4">Subscribe to access agentic portfolio analysis for your assets</p>
+            <p className="text-gray-300 mb-4">Subscribe to access agentic portfolio inspection for your assets</p>
             <Button 
               variant="default"
               onClick={sendTransaction}
@@ -338,7 +428,9 @@ export default function HomePage() {
                     >
                       {/* Asset Balance */}
                       <div className="flex justify-between items-start mb-3">
-                        <p className="text-white font-medium">{action.description}</p>
+                        <p className="text-white font-medium">
+                          {action.description.split(' ')[0]} Balance: {Number(action.description.split(' ')[2]).toFixed(2)}
+                        </p>
                         <span className={`px-2 py-1 rounded text-xs font-medium
                           ${action.risk === 'LOW' ? 'bg-green-500/20 text-green-400' : 
                             action.risk === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-400' : 
@@ -362,6 +454,11 @@ export default function HomePage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => setDepositModal({
+                          isOpen: true,
+                          symbol: action.description.split(' ')[0],
+                          balance: action.description.split(' ')[2]
+                        })}
                         className="w-full mt-4 bg-gradient-to-r from-blue-500/10 to-violet-500/10 hover:from-blue-500/20 hover:to-violet-500/20 text-white border-white/10"
                       >
                         Deposit Now
@@ -372,6 +469,17 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+        )}
+
+        {depositModal && (
+          <DepositModal
+            isOpen={true}
+            onClose={() => setDepositModal(null)}
+            onDeposit={handleDeposit}
+            balance={depositModal.balance}
+            symbol={depositModal.symbol}
+            isLoading={isDepositing}
+          />
         )}
 
         {alert && <Alert message={alert.message} variant={alert.variant} />}
