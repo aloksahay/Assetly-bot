@@ -46,9 +46,6 @@ BRIAN_API_KEY=your_brian_api_key
 - Portfolio inspection powered by Zerion
 - AAVE V3 deposits
 - Real-time terminal logging
-- Transaction status tracking
-- Glassmorphic UI design
-
 
 
 ## 📄 License
