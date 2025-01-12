@@ -8,7 +8,8 @@ import { Terminal } from '@/components/Terminal'
 import { Alert } from "@/components/ui/alert"
 import { DepositModal } from '@/components/DepositModal'
 import { PortfolioAnalyzer } from '@/lib/portfolio/PortfolioAnalyzer'
-import { useAgent } from '@/hooks/useAgent'
+import { useAgent } from "@/hooks/useAgent"
+import { PortfolioAnalysis } from "@/types/portfolio"
 
 // Add interface for asset type
 interface Asset {
@@ -18,6 +19,92 @@ interface Asset {
   valueUSD: number;
   isNative: boolean;
   displayable: boolean;
+}
+
+// Add new interfaces for the enhanced analysis display
+interface DeFiAnalysisProps {
+  valuation: PortfolioValuation;
+  defiMarketData: MarketData;
+  analysis: {
+    assessment: PortfolioAssessment;
+    opportunities: OpportunityAssessment;
+    strategy: StrategyRecommendation;
+  };
+}
+
+// New component to display DeFi market insights
+function DeFiMarketInsights({ defiMarketData }: { defiMarketData: MarketData }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        <div className="p-4 bg-white/5 rounded-lg">
+          <h4 className="text-sm font-medium text-gray-400">Total TVL</h4>
+          <p className="text-xl font-semibold text-white">
+            ${(defiMarketData.aggregateStats.totalTvl / 1e6).toFixed(2)}M
+          </p>
+        </div>
+        <div className="p-4 bg-white/5 rounded-lg">
+          <h4 className="text-sm font-medium text-gray-400">Avg Base APY</h4>
+          <p className="text-xl font-semibold text-white">
+            {defiMarketData.aggregateStats.avgBaseApy.toFixed(2)}%
+          </p>
+        </div>
+        <div className="p-4 bg-white/5 rounded-lg">
+          <h4 className="text-sm font-medium text-gray-400">Avg Reward APY</h4>
+          <p className="text-xl font-semibold text-white">
+            {defiMarketData.aggregateStats.avgRewardApy.toFixed(2)}%
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-lg font-medium text-white mb-4">Top Yield Opportunities</h3>
+        <div className="space-y-3">
+          {defiMarketData.protocols
+            .sort((a, b) => b.apy - a.apy)
+            .slice(0, 5)
+            .map((protocol, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                <div>
+                  <p className="text-white font-medium">{protocol.project}</p>
+                  <p className="text-sm text-gray-400">{protocol.symbol}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-white font-medium">{protocol.apy.toFixed(2)}% APY</p>
+                  <p className="text-sm text-gray-400">
+                    TVL: ${(protocol.tvl / 1e6).toFixed(2)}M
+                  </p>
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-lg font-medium text-white mb-4">Risk Analysis</h3>
+        <div className="space-y-3">
+          {defiMarketData.protocols.map((protocol, idx) => (
+            <div key={idx} className="p-3 bg-white/5 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-white font-medium">{protocol.project}</p>
+                <span className={`px-2 py-1 rounded text-sm ${
+                  protocol.ilRisk === 'LOW' ? 'bg-green-500/20 text-green-300' :
+                  protocol.ilRisk === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-300' :
+                  'bg-red-500/20 text-red-300'
+                }`}>
+                  {protocol.ilRisk} Risk
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm text-gray-400">
+                <p>24h Change: {protocol.protocolChange24h.toFixed(2)}%</p>
+                <p>7d Change: {protocol.protocolChange7d.toFixed(2)}%</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function HomePage() {
@@ -539,7 +626,7 @@ export default function HomePage() {
           <div className="mt-6 p-6 bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 rounded-xl hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
             <h2 className="text-xl font-bold mb-4 text-white">Portfolio Analysis</h2>
             
-            <div className="grid gap-6 text-gray-300">
+            <div className="grid gap-6">
               <div>
                 <h3 className="font-semibold text-white mb-2">Initial Assessment</h3>
                 <div className="whitespace-pre-wrap">
@@ -547,15 +634,10 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div>
-                <h3 className="font-semibold text-white mb-2">Opportunity Analysis</h3>
-                <div className="whitespace-pre-wrap">
-                  {analysis.opportunities}
-                </div>
-              </div>
+              <DeFiMarketInsights defiMarketData={analysis.defiMarketData} />
 
               <div>
-                <h3 className="font-semibold text-white mb-2">Recommended Strategy</h3>
+                <h3 className="font-semibold text-white mb-2">Strategy Recommendations</h3>
                 <div className="whitespace-pre-wrap">
                   {analysis.strategy}
                 </div>
