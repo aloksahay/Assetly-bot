@@ -30,3 +30,25 @@ export function getChainConfig(chainId: string) {
 }
 
 export const STABLECOINS = ['USDC', 'USDT', 'DAI', 'BUSD', 'TUSD', 'USDP']; 
+
+// Common stablecoins and USD detection
+export function isStablecoin(symbol: string): boolean {
+  // Default known stablecoins
+  const knownStablecoins = [
+    'USDC', 'USDT', 'DAI', 'BUSD', 'TUSD', 'USDP', 
+    'aEthUSDC', 'SepoliaMNT', 'USDD', 'USDX'
+  ];
+
+  const upperSymbol = symbol.toUpperCase();
+  
+  return (
+    // Check against known stablecoins
+    knownStablecoins.includes(upperSymbol) ||
+    // Check for USD in symbol
+    upperSymbol.includes('USD') ||
+    // Check for common wrapped/bridged stablecoin prefixes
+    upperSymbol.startsWith('W') && upperSymbol.includes('USD') || // Wrapped
+    upperSymbol.startsWith('B') && upperSymbol.includes('USD') || // Bridged
+    upperSymbol.startsWith('A') && upperSymbol.includes('USD')    // Aave
+  );
+} 

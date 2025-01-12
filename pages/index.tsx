@@ -10,7 +10,7 @@ import { DepositModal } from '@/components/DepositModal'
 import { PortfolioAnalyzer } from '@/lib/portfolio/PortfolioAnalyzer'
 import { useAgent } from "@/hooks/useAgent"
 import { PortfolioAnalysis } from "@/types/portfolio"
-import { NETWORK_CONFIG } from "@/utils/constants"
+import { NETWORK_CONFIG, isStablecoin } from "@/utils/constants"
 
 // Add interface for asset type
 interface Asset {
@@ -22,10 +22,28 @@ interface Asset {
   displayable: boolean;
 }
 
-// Add new interfaces for the enhanced analysis display
+// Update the interface for DeFi market data
 interface DeFiAnalysisProps {
   valuation: PortfolioValuation;
-  defiMarketData: MarketData;
+  defiMarketData: {
+    protocols: Array<{
+      tvl: number;
+      apy: number;
+      symbol: string;
+      project: string;
+      ilRisk: string;
+      protocolChange24h: number;
+      protocolChange7d: number;
+    }>;
+    aggregateStats: {
+      totalTvl: number;
+      avgApy: number;
+      volumeUsd24h: number;
+      avgBaseApy: number;
+      avgRewardApy: number;
+      totalProtocols: number;
+    };
+  };
   analysis: {
     assessment: PortfolioAssessment;
     opportunities: OpportunityAssessment;
@@ -33,8 +51,41 @@ interface DeFiAnalysisProps {
   };
 }
 
-// New component to display DeFi market insights
-function DeFiMarketInsights({ defiMarketData }: { defiMarketData: MarketData }) {
+// Add new interfaces for the enhanced analysis display
+interface DeFiAnalysisProps {
+  valuation: PortfolioValuation;
+  defiMarketData: {
+    protocols: Array<{
+      tvl: number;
+      apy: number;
+      symbol: string;
+      project: string;
+      ilRisk: string;
+      protocolChange24h: number;
+      protocolChange7d: number;
+    }>;
+    aggregateStats: {
+      totalTvl: number;
+      avgApy: number;
+      volumeUsd24h: number;
+      avgBaseApy: number;
+      avgRewardApy: number;
+      totalProtocols: number;
+    };
+  };
+  analysis: {
+    assessment: PortfolioAssessment;
+    opportunities: OpportunityAssessment;
+    strategy: StrategyRecommendation;
+  };
+}
+
+// Update the DeFiMarketInsights component
+function DeFiMarketInsights({ defiMarketData }: { defiMarketData: DeFiAnalysisProps['defiMarketData'] }) {
+  if (!defiMarketData || !defiMarketData.aggregateStats) {
+    return <div>Loading market data...</div>;
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
@@ -135,6 +186,7 @@ export default function HomePage() {
   const [isDepositing, setIsDepositing] = useState(false)
   const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null);
   const { agent } = useAgent();
+  const [marketNews, setMarketNews] = useState<any>(null);
 
   const addLog = (message: string, type?: 'info' | 'error' | 'success') => {
     setLogs(prev => [...prev, {
@@ -319,6 +371,81 @@ export default function HomePage() {
     }
   }, [analysisResults, agent]);
 
+  function getSentimentColor(sentiment: string): string {
+    const normalizedSentiment = sentiment.toUpperCase();
+    
+    // Check for neutral first
+    if (normalizedSentiment.includes('NEUTRAL') || normalizedSentiment === 'WATCH') {
+      return 'bg-yellow-500/20 text-yellow-300';
+    }
+    
+    // Then check positive/bullish
+    if (normalizedSentiment.includes('POSITIVE') || normalizedSentiment.includes('BULLISH')) {
+      return 'bg-green-500/20 text-green-300';
+    }
+    
+    // Then negative/bearish
+    if (normalizedSentiment.includes('NEGATIVE') || normalizedSentiment.includes('BEARISH')) {
+      return 'bg-red-500/20 text-red-300';
+    }
+    
+    // Default to yellow for unknown states
+    return 'bg-yellow-500/20 text-yellow-300';
+  }
+
+  const handleMarketAnalysis = async () => {
+    try {
+      const response = await fetch('/api/agent-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portfolioData: analysisResults })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get market analysis');
+      }
+
+      const { marketAnalysis } = await response.json();
+      console.log('Market Analysis Response:', marketAnalysis);
+
+      setMarketNews(marketAnalysis);
+      setAnalysis({
+        assessment: [
+          `Market Sentiment: ${marketAnalysis?.generalMarket?.sentiment || 'Unknown'}`,
+          '',
+          'Key Events:',
+          ...(marketAnalysis?.generalMarket?.majorEvents?.map(
+            e => `- ${e.title} (Impact: ${e.impact})`
+          ) || ['No major events']),
+          '',
+          'Token Analysis:',
+          ...Object.entries(marketAnalysis?.portfolioTokens || {}).map(
+            ([token, data]) => 
+              `${token}: ${data?.analysis?.recommendation || 'WATCH'} ` + 
+              `(Sentiment: ${data?.analysis?.sentiment || 0})`
+          )
+        ].join('\n'),
+        opportunities: marketAnalysis?.summary?.opportunities || [],
+        strategy: marketAnalysis?.summary?.actionItems?.join('\n') || 'No specific actions recommended',
+        timestamp: Date.now(),
+        portfolioTokens: marketAnalysis?.portfolioTokens || {},
+        defiMarketData: {
+          protocols: [], 
+          aggregateStats: {
+            totalTvl: 0,
+            avgApy: 0,
+            volumeUsd24h: 0,
+            avgBaseApy: 0,
+            avgRewardApy: 0,
+            totalProtocols: 0
+          }
+        }
+      });
+    } catch (err) {
+      console.error('Market analysis error:', err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
       <header className="sticky top-0 z-50 w-full border-b border-gray-800 backdrop-blur-sm bg-gray-900/75">
@@ -383,68 +510,26 @@ export default function HomePage() {
                     : 'Unknown Network'
               }</p>
             </div>
+            
+            <div className="mt-6">
+              <Button
+                variant="outline"
+                onClick={handleAnalyzePortfolio}
+                disabled={loading}
+                className="rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
+              >
+                {loading ? 'Analyzing...' : 'Get Assetly Recommendations'}
+              </Button>
+            </div>
           </div>
         )}
 
         {/* Portfolio Inspection Section */}
-        {address && (
+        {address && analysisResults && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-medium text-white">Portfolio Inspection</h2>
-              <div className="flex gap-4">
-                <Button
-                  variant="outline"
-                  onClick={handleAnalyzePortfolio}
-                  disabled={loading}
-                  className="rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
-                >
-                  {loading ? 'Analyzing...' : 'Get Assetly Recommendations'}
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    if (!analysisResults) {
-                      addLog('Please analyze portfolio first', 'error');
-                      return;
-                    }
-                    
-                    addLog('Starting AI portfolio analysis...');
-                    try {
-                      const response = await fetch('/api/agent-analysis', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                          portfolioData: analysisResults 
-                        })
-                      });
-
-                      if (!response.ok) {
-                        throw new Error('Failed to get AI analysis');
-                      }
-
-                      const aiAnalysis = await response.json();
-                      setAnalysis({
-                        assessment: aiAnalysis.assessment,
-                        opportunities: aiAnalysis.opportunities,
-                        strategy: aiAnalysis.strategy,
-                        timestamp: aiAnalysis.timestamp,
-                      });
-                      addLog('AI analysis complete', 'success');
-                    } catch (err) {
-                      console.error('AI analysis error:', err);
-                      addLog(`AI analysis failed: ${err}`, 'error');
-                    }
-                  }}
-                  disabled={loading || !analysisResults}
-                  className="rounded-full bg-gradient-to-r from-blue-500 to-violet-500 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
-                >
-                  AI Analysis
-                </Button>
-              </div>
-            </div>
-
-            {analysisResults && assets.length > 0 ? (
+            <h2 className="text-lg font-medium mb-6 text-white">Portfolio Inspection</h2>
+            
+            {assets.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 gap-6">
                   {/* Native Assets Section */}
@@ -504,11 +589,19 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Get Recommendations Button */}
-                <div className="mt-6 pt-6 border-t border-gray-700">
+                {/* Buttons at bottom */}
+                <div className="mt-6 flex justify-end gap-4">
                   <Button
-                    variant="default"
-                    className="w-full bg-gradient-to-r from-blue-500 to-violet-500 text-white rounded-lg hover:scale-[1.02] hover:shadow-lg transition-all duration-200"
+                    variant="outline"
+                    onClick={handleMarketAnalysis}
+                    disabled={loading || !analysisResults}
+                    className="rounded-full bg-gradient-to-r from-blue-500 to-violet-500 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
+                  >
+                    Market Analysis
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
                     onClick={async () => {
                       addLog('Fetching recommendations based on portfolio inspection...')
                       addLog('Assetly analyzing portfolio for optimal yield and risk strategies...', 'info')
@@ -532,6 +625,7 @@ export default function HomePage() {
                       }
                     }}
                     disabled={loading}
+                    className="rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
                   >
                     Get Assetly recommendations for Portfolio
                   </Button>
@@ -539,7 +633,7 @@ export default function HomePage() {
               </>
             ) : (
               <p className="text-gray-400 text-center py-8">
-                {loading ? 'Loading portfolio...' : 'Click Analyze Portfolio to view your assets'}
+                No assets found in portfolio
               </p>
             )}
           </div>
@@ -630,23 +724,67 @@ export default function HomePage() {
         {alert && <Alert message={alert.message} variant={alert.variant} />}
 
         {analysis && (
-          <div className="mt-6 p-6 bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 rounded-xl hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
-            <h2 className="text-xl font-bold mb-4 text-white">Portfolio Analysis</h2>
+          <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
+            <h2 className="text-lg font-medium mb-6 text-white">Market Analysis</h2>
             
-            <div className="grid gap-6">
-              <div>
-                <h3 className="font-semibold text-white mb-2">Initial Assessment</h3>
-                <div className="whitespace-pre-wrap">
-                  {analysis.assessment}
+            <div className="space-y-6">
+              {/* Market Sentiment Section */}
+              <div className="rounded-lg bg-black/20 backdrop-blur-md p-4 border border-white/5">
+                <h3 className="text-md font-medium text-gray-300 mb-4">Market Sentiment</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between py-2 px-3">
+                    <span className="text-gray-300">Overall Market:</span>
+                    <span className={`px-3 py-1 rounded-full text-sm ${getSentimentColor(analysis.assessment)}`}>
+                      {analysis.assessment.split('\n')[0].replace('Market Sentiment: ', '')}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <DeFiMarketInsights defiMarketData={analysis.defiMarketData} />
+              {/* Token News Section */}
+              <div className="rounded-lg bg-black/20 backdrop-blur-md p-4 border border-white/5">
+                <h3 className="text-md font-medium text-gray-300 mb-4">
+                  Events Potentially Affecting Your Holdings
+                </h3>
+                <div className="space-y-4">
+                  {Object.entries(marketNews?.portfolioTokens || {}).map(([token, data]) => {
+                    const news = data.news[0];  // Just get the first news item
+                    return (
+                      <div key={token} className="p-3 rounded-lg hover:bg-white/5 transition-colors duration-200">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-medium text-white">{token}</span>
+                          <span className={`px-3 py-1 rounded-full text-sm ${getSentimentColor(data.analysis.recommendation)}`}>
+                            {data.analysis.recommendation}
+                          </span>
+                        </div>
+                        <a 
+                          href={news.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block hover:opacity-80 transition-opacity"
+                        >
+                          <p className="text-sm text-gray-300">{news.title}</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Source: <span className="underline">{news.source}</span> • {new Date(news.timestamp).toLocaleDateString()}
+                          </p>
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-              <div>
-                <h3 className="font-semibold text-white mb-2">Strategy Recommendations</h3>
-                <div className="whitespace-pre-wrap">
-                  {analysis.strategy}
+              {/* Key Events Section */}
+              <div className="rounded-lg bg-black/20 backdrop-blur-md p-4 border border-white/5">
+                <h3 className="text-md font-medium text-gray-300 mb-4">Major Market Events</h3>
+                <div className="space-y-3">
+                  {analysis.assessment.split('\n')
+                    .filter(line => line.startsWith('- '))
+                    .map((event, idx) => (
+                      <div key={idx} className="py-2 px-3 rounded-lg hover:bg-white/5 transition-colors duration-200">
+                        <p className="text-gray-300">{event.substring(2)}</p>
+                      </div>
+                    ))}
                 </div>
               </div>
             </div>

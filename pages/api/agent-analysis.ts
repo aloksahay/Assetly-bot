@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { ChatOpenAI } from "@langchain/openai";
 import axios from 'axios';
 import { ethers } from 'ethers';
+import { isStablecoin } from '@/utils/constants';
+import { getMockNews } from '@/utils/mockData';
 
 interface TokenPosition {
   symbol: string;
@@ -279,6 +281,24 @@ interface MarketNewsAnalysis {
     opportunities: string[];
     actionItems: string[];
   };
+}
+
+interface NewsItem {
+  news_url: string;
+  image_url: string;
+  title: string;
+  text: string;
+  source_name: string;
+  date: string;
+  topics: string[];
+  sentiment: 'Positive' | 'Negative' | 'Neutral';
+  type: string;
+}
+
+interface NewsResponse {
+  data: NewsItem[];
+  total_pages: number;
+  total_items: number;
 }
 
 // Function to fetch DeFi protocol data from DeFiLlama
@@ -721,8 +741,8 @@ async function getGeneralMarketNews(): Promise<GeneralMarketNews> {
 async function analyzeMajorEvents(newsItems: any[]): Promise<GeneralMarketNews['majorEvents']> {
   const model = new ChatOpenAI({
     temperature: 0.3,
-    modelName: "gpt-4",
-    openAIApiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
+    modelName: "gpt-3.5-turbo",
+    openAIApiKey: process.env.OPENAI_API_KEY,
   });
 
   const response = await model.invoke(
@@ -830,20 +850,25 @@ function getTopTokens(tokens: string[]): string[] {
     .slice(0, 6);
 }
 
-// Modified function to get more news using pagination
-async function getTokenNews(tokens: string[], apiKey: string, pages: number = 2): Promise<any[]> {
-  const allNews = [];
+// Modified function to get news for a single token
+async function getTokenNews(token: string, apiKey: string, pages: number = 1): Promise<NewsItem[]> {
+  // Use mock data in development
+  if (process.env.NODE_ENV === 'development') {
+    const mockResponse = getMockNews(token);
+    return mockResponse.data;
+  }
+
+  // Real API call only happens in production
+  const allNews: NewsItem[] = [];
   
-  // Get news for each page
   for (let page = 1; page <= pages; page++) {
     try {
-      const response = await axios.get('https://cryptonews-api.com/api/v1', {
+      const response = await axios.get<NewsResponse>('https://cryptonews-api.com/api/v1', {
         params: {
           token: apiKey,
-          items: 3,  // API limit
-          tickers: tokens.join(','),
-          page: page,
-          sentiment: 'all'
+          items: 3,
+          tickers: token,
+          page: page
         }
       });
 
@@ -851,17 +876,77 @@ async function getTokenNews(tokens: string[], apiKey: string, pages: number = 2)
         allNews.push(...response.data.data);
       }
 
-      // Add small delay between pagination requests
       if (page < pages) {
         await new Promise(resolve => setTimeout(resolve, 250));
       }
     } catch (error) {
-      console.error(`Error fetching news page ${page} for tokens ${tokens.join(',')}:`, error);
-      break; // Stop on error
+      console.error(`Error fetching news for token ${token}, page ${page}:`, error);
+      break;
     }
   }
 
   return allNews;
+}
+
+// Function to get news for multiple tokens
+async function getAllTokenNews(tokens: string[], apiKey: string): Promise<Record<string, NewsItem[]>> {
+  const newsMap: Record<string, NewsItem[]> = {};
+  
+  // Get news for each token separately
+  for (const token of tokens) {
+    try {
+      // Get 3 news items for this token
+      const tokenNews = await getTokenNews(token, apiKey);
+      newsMap[token] = tokenNews;
+      
+      // Add delay between token requests
+      if (token !== tokens[tokens.length - 1]) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (error) {
+      console.error(`Failed to get news for ${token}:`, error);
+      newsMap[token] = [];
+    }
+  }
+
+  return newsMap;
+}
+
+// Helper function to calculate sentiment score from news items
+function calculateSentimentScore(news: NewsItem[]): number {
+  const sentimentMap = {
+    'Positive': 1,
+    'Negative': -1,
+    'Neutral': 0
+  };
+
+  const total = news.reduce((score, item) => 
+    score + sentimentMap[item.sentiment], 0
+  );
+
+  // Normalize to -1.5 to 1.5 range
+  return (total / news.length) * 1.5;
+}
+
+// Helper function to extract major events
+function extractMajorEvents(news: NewsItem[]): MarketNewsAnalysis['generalMarket']['majorEvents'] {
+  return news
+    .filter(item => item.sentiment !== 'Neutral')
+    .map(item => ({
+      title: item.title,
+      summary: item.text,
+      impact: item.sentiment === 'Positive' ? 'HIGH' : 'MEDIUM',
+      timestamp: item.date,
+      relevantTokens: extractTokensFromText(item.text)
+    }));
+}
+
+// Helper function to extract token symbols from text
+function extractTokensFromText(text: string): string[] {
+  const commonTokens = ['BTC', 'ETH', 'USDT', 'BNB', 'SOL', 'LINK'];
+  return commonTokens.filter(token => 
+    text.toUpperCase().includes(token)
+  );
 }
 
 // Update the market news analysis function
@@ -872,61 +957,75 @@ async function analyzeMarketNews(portfolio: PortfolioScan): Promise<MarketNewsAn
   }
 
   try {
-    // 1. Get general market sentiment (multiple pages)
-    const generalNews = await getTokenNews([], apiKey, 2); // 2 pages of general news
+    // 1. Get general market sentiment
+    const generalNews = await getTokenNews('', apiKey);
+    console.log('General News:', generalNews);
 
-    // 2. Get top priority tokens
-    const nonStableTokens = portfolio.tokens
-      .filter(t => !t.isStablecoin)
+    // 2. Get news for each token
+    // For news, we want non-stablecoins + USDC (special case)
+    const tokensForNews = portfolio.tokens
+      .filter(t => !t.isStablecoin || t.symbol === 'USDC')
       .map(t => t.symbol);
     
-    const topTokens = getTopTokens(nonStableTokens).slice(0, 3); // Top 3 tokens
-    
-    // 3. Get news for top tokens (multiple pages)
-    const tokenNews = await getTokenNews(topTokens, apiKey, 3); // 3 pages of token news
-
-    // Process results...
-    const generalMarket = {
-      sentiment: calculateMarketSentiment(generalNews),
-      score: calculateSentimentScore(generalNews),
-      majorEvents: extractMajorEvents(generalNews),
-      keyMetrics: analyzeMarketMetrics(generalNews)
-    };
+    const topTokens = getTopTokens(tokensForNews).slice(0, 3);
+    const tokenNewsMap = await getAllTokenNews(topTokens, apiKey);
+    console.log('Token News Map:', tokenNewsMap);
 
     // Process token-specific news
     const portfolioTokens: MarketNewsAnalysis['portfolioTokens'] = {};
     
-    portfolio.tokens
-      .filter(t => !t.isStablecoin)
-      .forEach(token => {
-        const tokenSpecificNews = tokenNews.filter(news => 
-          news.title.toLowerCase().includes(token.symbol.toLowerCase())
-        );
+    // Special handling for USDC in news section
+    tokensForNews.forEach(symbol => {
+      const tokenNews = tokenNewsMap[symbol] || [];
+      console.log(`Processing ${symbol} news:`, tokenNews);
+      
+      if (tokenNews.length > 0) {
+        // Calculate overall sentiment from all news items
+        const sentimentScore = calculateSentimentScore(tokenNews);
         
-        if (tokenSpecificNews.length > 0) {
-          portfolioTokens[token.symbol] = {
-            news: processTokenNews(tokenSpecificNews),
-            analysis: analyzeTokenNews(tokenSpecificNews, token.symbol)
-          };
+        // Determine recommendation based on sentiment score
+        let recommendation: 'BUY' | 'SELL' | 'HOLD';
+        if (sentimentScore > 0.5) {
+          recommendation = 'BUY';
+        } else if (sentimentScore < -0.5) {
+          recommendation = 'SELL';
         } else {
-          portfolioTokens[token.symbol] = {
-            news: [],
-            analysis: {
-              sentiment: 0,
-              riskFactors: ['Limited news coverage'],
-              opportunities: [],
-              recommendation: 'WATCH'
-            }
-          };
+          recommendation = 'HOLD';
         }
-      });
+
+        portfolioTokens[symbol] = {
+          news: [{
+            title: tokenNews[0].title,
+            sentiment: tokenNews[0].sentiment.toLowerCase(),
+            relevance: 1,
+            source: tokenNews[0].source_name,
+            url: tokenNews[0].news_url,
+            timestamp: tokenNews[0].date
+          }],
+          analysis: {
+            sentiment: sentimentScore,
+            riskFactors: symbol === 'USDC' ? ['Stablecoin stability'] : ['Market volatility'],
+            opportunities: [],
+            recommendation  // Now only BUY, SELL, or HOLD
+          }
+        };
+      }
+    });
 
     return {
-      generalMarket,
+      generalMarket: {
+        sentiment: calculateMarketSentiment(generalNews),
+        score: calculateSentimentScore(generalNews),
+        majorEvents: extractMajorEvents(generalNews),
+        keyMetrics: analyzeMarketMetrics(generalNews)
+      },
       portfolioTokens,
-      summary: generateMarketSummary(generalMarket, portfolioTokens, portfolio)
+      summary: {
+        opportunities: [],
+        actionItems: ['Monitor market conditions'],
+        riskLevel: 'MEDIUM'
+      }
     };
-
   } catch (error) {
     console.error('Market news analysis error:', error);
     throw error;
@@ -934,7 +1033,7 @@ async function analyzeMarketNews(portfolio: PortfolioScan): Promise<MarketNewsAn
 }
 
 // Helper functions for news analysis
-function calculateMarketSentiment(news: any[]): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
+function calculateMarketSentiment(news: NewsItem[]): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
   const sentimentScore = news.reduce((score, item) => {
     if (item.sentiment > 0) return score + 1;
     if (item.sentiment < 0) return score - 1;
@@ -946,27 +1045,17 @@ function calculateMarketSentiment(news: any[]): 'BULLISH' | 'BEARISH' | 'NEUTRAL
   return 'NEUTRAL';
 }
 
-function calculateSentimentScore(news: any[]): number {
-  // Calculate weighted sentiment score between -1.5 and 1.5
-  // Implementation here
-}
-
-function extractMajorEvents(news: any[]): MarketNewsAnalysis['generalMarket']['majorEvents'] {
-  // Extract and process major market events
-  // Implementation here
-}
-
-function analyzeMarketMetrics(news: any[]): MarketNewsAnalysis['generalMarket']['keyMetrics'] {
+function analyzeMarketMetrics(news: NewsItem[]): MarketNewsAnalysis['generalMarket']['keyMetrics'] {
   // Analyze market metrics from news
   // Implementation here
 }
 
-function processTokenNews(news: any[]): MarketNewsAnalysis['portfolioTokens'][string]['news'] {
+function processTokenNews(news: NewsItem[]): MarketNewsAnalysis['portfolioTokens'][string]['news'] {
   // Process and format token-specific news
   // Implementation here
 }
 
-function analyzeTokenNews(news: any[], symbol: string): MarketNewsAnalysis['portfolioTokens'][string]['analysis'] {
+function analyzeTokenNews(news: NewsItem[], symbol: string): MarketNewsAnalysis['portfolioTokens'][string]['analysis'] {
   // Analyze token-specific news and generate recommendations
   // Implementation here
 }
@@ -1024,12 +1113,6 @@ async function processZerionData(zerionData: any): Promise<PortfolioScan> {
     console.error('Error processing Zerion data:', error);
     throw error;
   }
-}
-
-// Helper function to check if token is a stablecoin
-function isStablecoin(symbol: string): boolean {
-  const stablecoins = ['USDC', 'USDT', 'DAI', 'BUSD', 'TUSD', 'USDP', 'aEthUSDC', 'SepoliaMNT'];
-  return stablecoins.includes(symbol.toUpperCase());
 }
 
 // Helper function to get prices from CoinMarketCap
