@@ -1,29 +1,37 @@
 import { Button } from "@/components/ui/button"
 import { useWallet } from "@/hooks/useWallet"
 import { EDUCHAIN_CONFIG } from "@/utils/constants"
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AaveService } from "@/utils/aave"
 import { ethers } from "ethers"
 import { Terminal } from '@/components/Terminal'
 import { Alert } from "@/components/ui/alert"
 import { DepositModal } from '@/components/DepositModal'
+import { PortfolioAnalyzer } from '@/lib/portfolio/PortfolioAnalyzer'
+import { useAgent } from '@/hooks/useAgent'
+
+// Add interface for asset type
+interface Asset {
+  symbol: string;
+  name: string;
+  quantity: number;
+  valueUSD: number;
+  isNative: boolean;
+  displayable: boolean;
+}
 
 export default function HomePage() {
   const { 
     address, 
     balance, 
     loading, 
-    error, 
-    isSubscribed,
+    error,
     connectWallet, 
-    sendTransaction,
     analyzePortfolio,
     analysisResults,
     recommendations,
     setRecommendations,
     setError,
-    unsubscribe,
-    network,
     disconnect,
     chainId,
     alert
@@ -37,6 +45,8 @@ export default function HomePage() {
     balance: string;
   } | null>(null);
   const [isDepositing, setIsDepositing] = useState(false)
+  const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null);
+  const { agent } = useAgent();
 
   const addLog = (message: string, type?: 'info' | 'error' | 'success') => {
     setLogs(prev => [...prev, {
@@ -49,20 +59,27 @@ export default function HomePage() {
   const handleAnalyzePortfolio = async () => {
     addLog('Starting portfolio inspection with Zerion API...')
     try {
-      await analyzePortfolio()
-      addLog('Portfolio inspection complete', 'success')
+      const results = await analyzePortfolio()
+      if (results) {
+        addLog('Portfolio inspection complete', 'success')
+        // Optionally trigger AI analysis automatically
+        if (agent) {
+          addLog('Starting AI portfolio analysis...');
+          try {
+            const analyzer = new PortfolioAnalyzer(agent);
+            const portfolioAnalysis = await analyzer.analyzePortfolio(results.data);
+            
+            if (portfolioAnalysis) {
+              setAnalysis(portfolioAnalysis);
+              addLog('AI analysis complete', 'success');
+            }
+          } catch (err) {
+            addLog(`AI analysis failed: ${err}`, 'error');
+          }
+        }
+      }
     } catch (err) {
       addLog(`Inspection failed: ${err}`, 'error')
-    }
-  }
-
-  const handleUnsubscribe = async () => {
-    addLog('Unsubscribing...')
-    try {
-      await unsubscribe()
-      addLog('Successfully unsubscribed', 'success')
-    } catch (err) {
-      addLog(`Failed to unsubscribe: ${err}`, 'error')
     }
   }
 
@@ -87,14 +104,14 @@ export default function HomePage() {
   }
 
   // Format assets from Zerion response
-  const formatAssets = (data: any) => {
-    if (!data?.data) return []
+  const formatAssets = (data: any): Asset[] => {
+    if (!data?.data) return [];
     
     return data.data
       .filter((position: any) => 
         !position.attributes.flags.is_trash
       )
-      .map((position: any) => ({
+      .map((position: any): Asset => ({
         symbol: position.attributes.fungible_info.symbol,
         name: position.attributes.fungible_info.name,
         quantity: position.attributes.quantity.numeric,
@@ -103,7 +120,7 @@ export default function HomePage() {
           (impl: any) => impl.address === null
         ),
         displayable: position.attributes.flags.displayable
-      }))
+      }));
   }
 
   const assets = analysisResults ? formatAssets(analysisResults) : []
@@ -196,6 +213,24 @@ export default function HomePage() {
     }
   }
 
+  useEffect(() => {
+    if (analysisResults && agent) {
+      const analyzer = new PortfolioAnalyzer(agent);
+      
+      const analyzePortfolio = async () => {
+        const portfolioAnalysis = await analyzer.analyzePortfolio(analysisResults.data);
+        setAnalysis(portfolioAnalysis);
+      };
+
+      analyzePortfolio();
+
+      // Set up interval for continuous monitoring
+      const interval = setInterval(analyzePortfolio, 5 * 60 * 1000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [analysisResults, agent]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
       <header className="sticky top-0 z-50 w-full border-b border-gray-800 backdrop-blur-sm bg-gray-900/75">
@@ -203,7 +238,7 @@ export default function HomePage() {
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center">
               <h1 className="text-xl font-medium bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-                Assetly: Your DeFi Agent on EDU Chain
+                Assetly: Your DeFi Portfolio Agent
               </h1>
             </div>
 
@@ -258,7 +293,7 @@ export default function HomePage() {
         )}
 
         {/* Portfolio Inspection Section */}
-        {address && isSubscribed && (
+        {address && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-medium text-white">Portfolio Inspection</h2>
@@ -269,18 +304,49 @@ export default function HomePage() {
                   disabled={loading}
                   className="rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
                 >
-                  {loading ? 'Analyzing...' : 'Analyze Portfolio'}
+                  {loading ? 'Analyzing...' : 'Get Assetly Recommendations'}
                 </Button>
-                {isSubscribed && (
-                  <Button 
-                    variant="outline"
-                    onClick={handleUnsubscribe}
-                    disabled={loading}
-                    className="rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
-                  >
-                    Unsubscribe
-                  </Button>
-                )}
+                
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!analysisResults) {
+                      addLog('Please analyze portfolio first', 'error');
+                      return;
+                    }
+                    
+                    addLog('Starting AI portfolio analysis...');
+                    try {
+                      const response = await fetch('/api/agent-analysis', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                          portfolioData: analysisResults 
+                        })
+                      });
+
+                      if (!response.ok) {
+                        throw new Error('Failed to get AI analysis');
+                      }
+
+                      const aiAnalysis = await response.json();
+                      setAnalysis({
+                        assessment: aiAnalysis.assessment,
+                        opportunities: aiAnalysis.opportunities,
+                        strategy: aiAnalysis.strategy,
+                        timestamp: aiAnalysis.timestamp,
+                      });
+                      addLog('AI analysis complete', 'success');
+                    } catch (err) {
+                      console.error('AI analysis error:', err);
+                      addLog(`AI analysis failed: ${err}`, 'error');
+                    }
+                  }}
+                  disabled={loading || !analysisResults}
+                  className="rounded-full bg-gradient-to-r from-blue-500 to-violet-500 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
+                >
+                  AI Analysis
+                </Button>
               </div>
             </div>
 
@@ -385,21 +451,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Show message when not subscribed */}
-        {address && !isSubscribed && (
-          <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 text-center">
-            <p className="text-gray-300 mb-4">Subscribe to access agentic portfolio inspection for your assets</p>
-            <Button 
-              variant="default"
-              onClick={sendTransaction}
-              disabled={loading}
-              className="bg-gradient-to-r from-blue-500 to-violet-500 text-white rounded-lg hover:opacity-90 transition-opacity"
-            >
-              Subscribe for 1 month (0.001 $EDU)
-            </Button>
-          </div>
-        )}
-
         {/* Assetly Recommendations Section */}
         {rawResponse && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
@@ -483,6 +534,35 @@ export default function HomePage() {
         )}
 
         {alert && <Alert message={alert.message} variant={alert.variant} />}
+
+        {analysis && (
+          <div className="mt-6 p-6 bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 rounded-xl hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
+            <h2 className="text-xl font-bold mb-4 text-white">Portfolio Analysis</h2>
+            
+            <div className="grid gap-6 text-gray-300">
+              <div>
+                <h3 className="font-semibold text-white mb-2">Initial Assessment</h3>
+                <div className="whitespace-pre-wrap">
+                  {analysis.assessment}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-white mb-2">Opportunity Analysis</h3>
+                <div className="whitespace-pre-wrap">
+                  {analysis.opportunities}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-white mb-2">Recommended Strategy</h3>
+                <div className="whitespace-pre-wrap">
+                  {analysis.strategy}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       <Terminal logs={logs} />
