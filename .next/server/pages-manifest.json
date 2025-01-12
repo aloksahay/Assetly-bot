@@ -2,7 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
+  "/": "pages/index.js",
+  "/api/yield-analysis": "pages/api/yield-analysis.js",
   "/api/analyze-portfolio": "pages/api/analyze-portfolio.js",
-  "/api/agent-analysis": "pages/api/agent-analysis.js",
-  "/": "pages/index.js"
+  "/api/agent-analysis": "pages/api/agent-analysis.js"
 }

@@ -187,6 +187,7 @@ export default function HomePage() {
   const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null);
   const { agent } = useAgent();
   const [marketNews, setMarketNews] = useState<any>(null);
+  const [yieldData, setYieldData] = useState<any>(null);
 
   const addLog = (message: string, type?: 'info' | 'error' | 'success') => {
     setLogs(prev => [...prev, {
@@ -443,6 +444,30 @@ export default function HomePage() {
       });
     } catch (err) {
       console.error('Market analysis error:', err);
+    }
+  };
+
+  const handleYieldAnalysis = async () => {
+    try {
+      console.log('Starting yield analysis for tokens:', assets.map(a => a.symbol));
+      
+      const response = await fetch('/api/yield-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          tokens: assets.map(a => a.symbol)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get yield analysis');
+      }
+
+      const data = await response.json();
+      console.log('Yield analysis response:', data);
+      setYieldData(data.yields);
+    } catch (err) {
+      console.error('Yield analysis error:', err);
     }
   };
 
@@ -787,6 +812,73 @@ export default function HomePage() {
                     ))}
                 </div>
               </div>
+
+              {/* Add Yield Analysis Button */}
+              <div className="mt-8 flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={handleYieldAnalysis}
+                  className="rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
+                >
+                  Yield Analysis
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {yieldData && (
+          <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
+            <h2 className="text-lg font-medium mb-6 text-white">DeFi Yield Analysis</h2>
+            
+            <div className="space-y-6">
+              {Object.entries(yieldData).map(([token, pools]) => (
+                <div key={token} className="space-y-4">
+                  <h3 className="text-md font-medium text-gray-300">{token} Lending Opportunities</h3>
+                  
+                  {pools.map((pool: any, idx: number) => (
+                    <div key={idx} className="p-4 rounded-lg bg-black/20 backdrop-blur-md border border-white/5">
+                      <div className="flex justify-between items-center mb-3">
+                        <div>
+                          <span className="font-medium text-white">{pool.protocol}</span>
+                          <span className="text-sm text-gray-400 ml-2">({pool.chain})</span>
+                        </div>
+                        <span className="text-sm text-gray-400">
+                          TVL: ${pool.tvlUsd}M
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-400">Base APY</p>
+                          <p className="text-lg font-medium text-green-400">
+                            {pool.supplyAPY}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-400">Reward APY</p>
+                          <p className="text-lg font-medium text-blue-400">
+                            {pool.rewardAPY}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-400">Total APY</p>
+                          <p className="text-lg font-medium text-yellow-400">
+                            {pool.totalAPY}%
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-3 text-sm text-gray-400 flex justify-between">
+                        <span>24h TVL Change: {pool.tvlChange24h}%</span>
+                        {Number(pool.il7d) !== 0 && (
+                          <span>7d IL: {pool.il7d}%</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
         )}

@@ -839,6 +839,7 @@ function getTopTokens(tokens: string[]): string[] {
     'ETH': 5,
     'BTC': 4,
     'LINK': 3,
+    'USDC': 3,  // Add USDC with high priority
     'BNB': 2,
     'MATIC': 2,
     'AAVE': 2
@@ -915,17 +916,20 @@ async function getAllTokenNews(tokens: string[], apiKey: string): Promise<Record
 // Helper function to calculate sentiment score from news items
 function calculateSentimentScore(news: NewsItem[]): number {
   const sentimentMap = {
-    'Positive': 1,
+    'Positive': 1.5,
     'Negative': -1,
     'Neutral': 0
   };
 
-  const total = news.reduce((score, item) => 
-    score + sentimentMap[item.sentiment], 0
-  );
+  const total = news.reduce((score, item) => {
+    // Give more weight to recent news
+    const isRecent = new Date(item.date) > new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const weight = isRecent ? 1.2 : 1;
+    return score + (sentimentMap[item.sentiment] * weight);
+  }, 0);
 
   // Normalize to -1.5 to 1.5 range
-  return (total / news.length) * 1.5;
+  return Math.max(-1.5, Math.min(1.5, total / news.length));
 }
 
 // Helper function to extract major events
@@ -983,32 +987,52 @@ async function analyzeMarketNews(portfolio: PortfolioScan): Promise<MarketNewsAn
         // Calculate overall sentiment from all news items
         const sentimentScore = calculateSentimentScore(tokenNews);
         
-        // Determine recommendation based on sentiment score
-        let recommendation: 'BUY' | 'SELL' | 'HOLD';
-        if (sentimentScore > 0.5) {
-          recommendation = 'BUY';
-        } else if (sentimentScore < -0.5) {
-          recommendation = 'SELL';
+        // Special handling for USDC
+        if (symbol === 'USDC') {
+          portfolioTokens[symbol] = {
+            news: [{
+              title: tokenNews[0].title,
+              sentiment: tokenNews[0].sentiment.toLowerCase(),
+              relevance: 1,
+              source: tokenNews[0].source_name,
+              url: tokenNews[0].news_url,
+              timestamp: tokenNews[0].date
+            }],
+            analysis: {
+              sentiment: sentimentScore,
+              riskFactors: ['Stablecoin stability'],
+              opportunities: [],
+              recommendation: 'HOLD'  // USDC always shows HOLD
+            }
+          };
         } else {
-          recommendation = 'HOLD';
-        }
-
-        portfolioTokens[symbol] = {
-          news: [{
-            title: tokenNews[0].title,
-            sentiment: tokenNews[0].sentiment.toLowerCase(),
-            relevance: 1,
-            source: tokenNews[0].source_name,
-            url: tokenNews[0].news_url,
-            timestamp: tokenNews[0].date
-          }],
-          analysis: {
-            sentiment: sentimentScore,
-            riskFactors: symbol === 'USDC' ? ['Stablecoin stability'] : ['Market volatility'],
-            opportunities: [],
-            recommendation  // Now only BUY, SELL, or HOLD
+          // Regular tokens get BUY/SELL/HOLD recommendations
+          let recommendation: 'BUY' | 'SELL' | 'HOLD';
+          if (sentimentScore > 0.3) {
+            recommendation = 'BUY';
+          } else if (sentimentScore < -0.5) {
+            recommendation = 'SELL';
+          } else {
+            recommendation = 'HOLD';
           }
-        };
+
+          portfolioTokens[symbol] = {
+            news: [{
+              title: tokenNews[0].title,
+              sentiment: tokenNews[0].sentiment.toLowerCase(),
+              relevance: 1,
+              source: tokenNews[0].source_name,
+              url: tokenNews[0].news_url,
+              timestamp: tokenNews[0].date
+            }],
+            analysis: {
+              sentiment: sentimentScore,
+              riskFactors: ['Market volatility'],
+              opportunities: [],
+              recommendation
+            }
+          };
+        }
       }
     });
 
