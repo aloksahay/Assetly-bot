@@ -10,6 +10,7 @@ import { DepositModal } from '@/components/DepositModal'
 import { PortfolioAnalyzer } from '@/lib/portfolio/PortfolioAnalyzer'
 import { useAgent } from "@/hooks/useAgent"
 import { PortfolioAnalysis } from "@/types/portfolio"
+import { NETWORK_CONFIG } from "@/utils/constants"
 
 // Add interface for asset type
 interface Asset {
@@ -332,7 +333,7 @@ export default function HomePage() {
             <div className="flex items-center gap-4">
               {address && balance && (
                 <div className="text-sm text-gray-300">
-                  <span className="font-medium">{parseFloat(balance).toFixed(4)} EDU</span>
+                  <span className="font-medium">{parseFloat(balance).toFixed(4)} ETH</span>
                 </div>
               )}
               {address ? (
@@ -373,8 +374,14 @@ export default function HomePage() {
             <h2 className="text-lg font-medium mb-4 text-white">Wallet Details</h2>
             <div className="space-y-2 text-gray-300">
               <p><span className="font-medium">Address:</span> {address}</p>
-              <p><span className="font-medium">Balance:</span> {balance} EDU</p>
-              <p><span className="font-medium">Chain ID:</span> {chainId}</p>
+              <p><span className="font-medium">Balance:</span> {balance}</p>
+              <p><span className="font-medium">Network:</span> {
+                chainId === NETWORK_CONFIG['Ethereum Sepolia'].chainId 
+                  ? 'Ethereum Sepolia' 
+                  : chainId === NETWORK_CONFIG['Arbitrum Sepolia'].chainId 
+                    ? 'Arbitrum Sepolia' 
+                    : 'Unknown Network'
+              }</p>
             </div>
           </div>
         )}
