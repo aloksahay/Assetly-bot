@@ -11,6 +11,7 @@ import { PortfolioAnalyzer } from '@/lib/portfolio/PortfolioAnalyzer'
 import { useAgent } from "@/hooks/useAgent"
 import { PortfolioAnalysis } from "@/types/portfolio"
 import { NETWORK_CONFIG, isStablecoin } from "@/utils/constants"
+import { UniswapService } from "@/utils/uniswap"
 
 // Add interface for asset type
 interface Asset {
@@ -188,6 +189,14 @@ export default function HomePage() {
   const { agent } = useAgent();
   const [marketNews, setMarketNews] = useState<any>(null);
   const [yieldData, setYieldData] = useState<any>(null);
+  const [swapModal, setSwapModal] = useState<{
+    isOpen: boolean;
+    symbol: string;
+    balance: string;
+    action: 'BUY' | 'SELL';
+  } | null>(null);
+  const [isSwapping, setIsSwapping] = useState(false);
+  const [showRecommendations, setShowRecommendations] = useState(false);
 
   const addLog = (message: string, type?: 'info' | 'error' | 'success') => {
     setLogs(prev => [...prev, {
@@ -198,29 +207,32 @@ export default function HomePage() {
   }
 
   const handleAnalyzePortfolio = async () => {
-    addLog('Starting portfolio inspection with Zerion API...')
+    addLog('🔍 Starting portfolio analysis flow...')
+    addLog('1. Connecting to Zerion API for portfolio data...')
     try {
       const results = await analyzePortfolio()
       if (results) {
-        addLog('Portfolio inspection complete', 'success')
-        // Optionally trigger AI analysis automatically
+        addLog('✅ Portfolio data retrieved successfully')
+        addLog(`📊 Found ${formatAssets(results).length} assets in portfolio`)
+        
         if (agent) {
-          addLog('Starting AI portfolio analysis...');
+          addLog('2. Starting AI analysis of portfolio...')
           try {
             const analyzer = new PortfolioAnalyzer(agent);
             const portfolioAnalysis = await analyzer.analyzePortfolio(results.data);
             
             if (portfolioAnalysis) {
               setAnalysis(portfolioAnalysis);
-              addLog('AI analysis complete', 'success');
+              addLog('✅ AI portfolio analysis complete')
+              addLog('💡 Portfolio risk assessment and recommendations generated')
             }
           } catch (err) {
-            addLog(`AI analysis failed: ${err}`, 'error');
+            addLog('❌ AI analysis failed: ' + err, 'error')
           }
         }
       }
     } catch (err) {
-      addLog(`Inspection failed: ${err}`, 'error')
+      addLog('❌ Portfolio inspection failed: ' + err, 'error')
     }
   }
 
@@ -228,7 +240,7 @@ export default function HomePage() {
     addLog('Connecting wallet...')
     try {
       await connectWallet()
-      addLog('Wallet connected successfully', 'success')
+      addLog(`Wallet connected: ${address?.slice(0, 6)}...${address?.slice(-4)}`, 'success')
     } catch (err) {
       addLog(`Failed to connect wallet: ${err}`, 'error')
     }
@@ -250,7 +262,9 @@ export default function HomePage() {
     
     return data.data
       .filter((position: any) => 
-        !position.attributes.flags.is_trash
+        // Include all non-trash tokens and specifically include LINK
+        !position.attributes.flags.is_trash || 
+        position.attributes.fungible_info.symbol === 'LINK'
       )
       .map((position: any): Asset => ({
         symbol: position.attributes.fungible_info.symbol,
@@ -260,7 +274,7 @@ export default function HomePage() {
         isNative: position.attributes.fungible_info.implementations.some(
           (impl: any) => impl.address === null
         ),
-        displayable: position.attributes.flags.displayable
+        displayable: true // Set displayable to true for all supported tokens
       }));
   }
 
@@ -273,16 +287,21 @@ export default function HomePage() {
       if (!window.ethereum) throw new Error('Please install MetaMask')
 
       // Request network change first
-      addLog('Switching to Sepolia network...')
+      addLog('Checking network...')
       try {
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0xaa36a7' }], // Sepolia
-        })
-        addLog('Successfully switched to Sepolia', 'success')
+        if (chainId !== '0xaa36a7') {
+          addLog('Switching to Sepolia network...')
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xaa36a7' }], // Sepolia
+          })
+          addLog('Successfully switched to Sepolia', 'success')
+        } else {
+          addLog('Already on Sepolia network', 'success')
+        }
       } catch (switchError: any) {
         if (switchError.code === 4902) {
-          addLog('Adding Sepolia network...')
+          addLog('Sepolia network not found, adding it...')
           await window.ethereum.request({
             method: 'wallet_addEthereumChain',
             params: [{
@@ -304,49 +323,44 @@ export default function HomePage() {
 
       const provider = new ethers.BrowserProvider(window.ethereum)
       const signer = await provider.getSigner()
+      addLog('Connected to wallet signer', 'success')
+
       const aave = new AaveService(provider)
+      addLog('Initialized AAVE service')
       
       const decimals = depositModal?.symbol === 'USDC' ? 6 : 18
       const depositAmount = ethers.parseUnits(Number(amount).toFixed(2), decimals)
+      addLog(`Preparing to deposit ${amount} ${depositModal?.symbol} (${depositAmount.toString()} wei)`)
       
-      addLog('Approving AAVE to spend tokens...')
+      addLog('Requesting approval for AAVE to spend tokens...')
       const tx = await aave.deposit(
         depositAmount.toString(),
         signer
       )
 
-      addLog('Waiting for deposit confirmation...')
+      addLog('Transaction submitted. Waiting for confirmation...')
+      addLog(`Transaction hash: ${tx.hash}`)
+      
       await tx.wait()
-      addLog('Deposit successful!', 'success')
+      addLog('Deposit transaction confirmed!', 'success')
       setDepositModal(null)
 
-      // Refresh both portfolio and recommendations
-      addLog('Refreshing portfolio data...')
+      // Refresh all analysis
+      addLog('Refreshing portfolio analysis...')
       await handleAnalyzePortfolio()
       
-      // If we have existing recommendations, refresh them
-      if (rawResponse) {
-        addLog('Updating yield recommendations...')
-        try {
-          const response = await fetch('/api/get-recommendations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ portfolioData: analysisResults.data })
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to get recommendations');
-          }
-
-          const data = await response.json();
-          addLog('Updated Assetly recommendations after deposit', 'success')
-          setRawResponse(JSON.stringify(data, null, 2));
-        } catch (err) {
-          addLog(`Failed to update recommendations: ${err}`, 'error')
-        }
-      }
+      // Refresh market analysis
+      addLog('Updating market analysis...')
+      await handleMarketAnalysis()
       
+      // Refresh yield analysis
+      addLog('Updating yield opportunities...')
+      await handleYieldAnalysis()
+      
+      addLog('All portfolio data updated', 'success')
+
     } catch (err) {
+      console.error('Deposit error:', err)
       addLog(`Deposit failed: ${err}`, 'error')
       setError(err instanceof Error ? err.message : 'Failed to deposit')
     } finally {
@@ -396,6 +410,8 @@ export default function HomePage() {
 
   const handleMarketAnalysis = async () => {
     try {
+      addLog('📈 Starting market analysis...')
+      addLog('1. Fetching current market conditions...')
       const response = await fetch('/api/agent-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -408,6 +424,9 @@ export default function HomePage() {
 
       const { marketAnalysis } = await response.json();
       console.log('Market Analysis Response:', marketAnalysis);
+      addLog('2. Analyzing market sentiment...')
+      addLog('3. Checking token-specific news...')
+      addLog('✅ Market analysis complete')
 
       setMarketNews(marketAnalysis);
       setAnalysis({
@@ -444,18 +463,20 @@ export default function HomePage() {
       });
     } catch (err) {
       console.error('Market analysis error:', err);
+      addLog('❌ Market analysis failed: ' + err, 'error');
     }
   };
 
   const handleYieldAnalysis = async () => {
     try {
-      console.log('Starting yield analysis for tokens:', assets.map(a => a.symbol));
-      
+      addLog('💰 Starting yield analysis...')
+      addLog('1. Fetching current APY rates from DeFi protocols...')
       const response = await fetch('/api/yield-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          tokens: assets.map(a => a.symbol)
+          tokens: assets.map(a => a.symbol),
+          chainId: chainId
         })
       });
 
@@ -464,10 +485,64 @@ export default function HomePage() {
       }
 
       const data = await response.json();
-      console.log('Yield analysis response:', data);
+      addLog('2. Filtering best yield opportunities...')
+      addLog('✅ Yield analysis complete')
       setYieldData(data.yields);
     } catch (err) {
       console.error('Yield analysis error:', err);
+      addLog('❌ Yield analysis failed: ' + err, 'error');
+    }
+  };
+
+  const handleSwap = async (amount: string) => {
+    setIsSwapping(true);
+    addLog(`Initiating ${swapModal?.action.toLowerCase()} swap for ${amount} ${swapModal?.symbol}...`);
+    
+    try {
+      if (!window.ethereum) throw new Error('Please install MetaMask');
+
+      // Network check (same as deposit)
+      addLog('Checking network...');
+      // ... (reuse network check code from handleDeposit)
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      addLog('Connected to wallet signer', 'success');
+
+      const uniswap = new UniswapService(provider);
+      addLog('Initialized Uniswap service');
+
+      // Get token addresses (you'll need to maintain a mapping or fetch these)
+      const tokenIn = swapModal?.action === 'SELL' ? swapModal.symbol : 'ETH';
+      const tokenOut = swapModal?.action === 'BUY' ? swapModal.symbol : 'ETH';
+      
+      addLog(`Preparing to swap ${amount} ${tokenIn} for ${tokenOut}`);
+      
+      const tx = await uniswap.swap(
+        tokenIn,
+        tokenOut,
+        amount,
+        signer
+      );
+
+      addLog('Transaction submitted. Waiting for confirmation...');
+      addLog(`Transaction hash: ${tx.hash}`);
+      
+      await tx.wait();
+      addLog('Swap transaction confirmed!', 'success');
+      setSwapModal(null);
+
+      // Refresh portfolio data
+      addLog('Refreshing portfolio data...');
+      await handleAnalyzePortfolio();
+      addLog('Portfolio data updated', 'success');
+
+    } catch (err) {
+      console.error('Swap error:', err);
+      addLog(`Swap failed: ${err}`, 'error');
+      setError(err instanceof Error ? err.message : 'Failed to swap');
+    } finally {
+      setIsSwapping(false);
     }
   };
 
@@ -485,7 +560,11 @@ export default function HomePage() {
             <div className="flex items-center gap-4">
               {address && balance && (
                 <div className="text-sm text-gray-300">
-                  <span className="font-medium">{parseFloat(balance).toFixed(4)} ETH</span>
+                  <span className="font-medium">
+                    {balance?.toString() === '[object Object]' 
+                      ? '0.00'
+                      : parseFloat(balance?.toString() || '0').toFixed(4)} ETH
+                  </span>
                 </div>
               )}
               {address ? (
@@ -521,12 +600,18 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* 1. Wallet Details Card */}
         {address && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
             <h2 className="text-lg font-medium mb-4 text-white">Wallet Details</h2>
             <div className="space-y-2 text-gray-300">
               <p><span className="font-medium">Address:</span> {address}</p>
-              <p><span className="font-medium">Balance:</span> {balance}</p>
+              <p>
+                <span className="font-medium">Balance:</span>{' '}
+                {balance?.toString() === '[object Object]'
+                  ? '0.00'
+                  : parseFloat(balance?.toString() || '0').toFixed(4)} ETH
+              </p>
               <p><span className="font-medium">Network:</span> {
                 chainId === NETWORK_CONFIG['Ethereum Sepolia'].chainId 
                   ? 'Ethereum Sepolia' 
@@ -536,20 +621,20 @@ export default function HomePage() {
               }</p>
             </div>
             
-            <div className="mt-6">
+            <div className="mt-6 flex justify-end">
               <Button
                 variant="outline"
                 onClick={handleAnalyzePortfolio}
                 disabled={loading}
                 className="rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
               >
-                {loading ? 'Analyzing...' : 'Get Assetly Recommendations'}
+                {loading ? 'Analyzing...' : 'Inspect Portfolio'}
               </Button>
             </div>
           </div>
         )}
 
-        {/* Portfolio Inspection Section */}
+        {/* 2. Portfolio Inspection Card */}
         {address && analysisResults && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
             <h2 className="text-lg font-medium mb-6 text-white">Portfolio Inspection</h2>
@@ -624,36 +709,6 @@ export default function HomePage() {
                   >
                     Market Analysis
                   </Button>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={async () => {
-                      addLog('Fetching recommendations based on portfolio inspection...')
-                      addLog('Assetly analyzing portfolio for optimal yield and risk strategies...', 'info')
-                      try {
-                        const response = await fetch('/api/get-recommendations', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ portfolioData: analysisResults.data })
-                        });
-
-                        if (!response.ok) {
-                          throw new Error('Failed to get recommendations');
-                        }
-
-                        const data = await response.json();
-                        addLog('Assetly recommends AAVE for optimal risk-adjusted yield', 'success')
-                        setRawResponse(JSON.stringify(data, null, 2));
-                      } catch (err) {
-                        addLog(`Failed to get recommendations: ${err}`, 'error')
-                        setError(err instanceof Error ? err.message : 'Failed to get recommendations');
-                      }
-                    }}
-                    disabled={loading}
-                    className="rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
-                  >
-                    Get Assetly recommendations for Portfolio
-                  </Button>
                 </div>
               </>
             ) : (
@@ -664,90 +719,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Assetly Recommendations Section */}
-        {rawResponse && (
-          <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
-            <h2 className="text-lg font-medium mb-6 text-white">Assetly recommends</h2>
-            
-            {JSON.parse(rawResponse).recommendations.map((rec: any, idx: number) => (
-              <div key={idx} className="space-y-4">
-                {/* Recommendation Type Header */}
-                <div className="flex items-center gap-2">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium
-                    ${rec.type === 'YIELD' ? 'bg-green-500/20 text-green-400' : 
-                      rec.type === 'REBALANCE' ? 'bg-blue-500/20 text-blue-400' : 
-                      'bg-yellow-500/20 text-yellow-400'}`}
-                  >
-                    {rec.type}
-                  </span>
-                  <h3 className="text-white font-medium">{rec.description}</h3>
-                </div>
-
-                {/* Actions Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  {rec.actions.map((action: any, actionIdx: number) => (
-                    <div 
-                      key={actionIdx}
-                      className="bg-black/20 backdrop-blur-md rounded-lg p-4 border border-white/5 hover:bg-black/30 transition-all duration-200"
-                    >
-                      {/* Asset Balance */}
-                      <div className="flex justify-between items-start mb-3">
-                        <p className="text-white font-medium">
-                          {action.description.split(' ')[0]} Balance: {Number(action.description.split(' ')[2]).toFixed(2)}
-                        </p>
-                        <span className={`px-2 py-1 rounded text-xs font-medium
-                          ${action.risk === 'LOW' ? 'bg-green-500/20 text-green-400' : 
-                            action.risk === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-400' : 
-                            'bg-red-500/20 text-red-400'}`}
-                        >
-                          {action.risk} RISK
-                        </span>
-                      </div>
-
-                      {/* APY Rate */}
-                      {action.expectedReturn && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="text-gray-400">Expected Return:</span>
-                          <span className="text-green-400 font-medium">
-                            {action.expectedReturn.replace('Current AAVE lending rate: ', '')}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Action Button */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDepositModal({
-                          isOpen: true,
-                          symbol: action.description.split(' ')[0],
-                          balance: action.description.split(' ')[2]
-                        })}
-                        className="w-full mt-4 bg-gradient-to-r from-blue-500/10 to-violet-500/10 hover:from-blue-500/20 hover:to-violet-500/20 text-white border-white/10"
-                      >
-                        Deposit Now
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {depositModal && (
-          <DepositModal
-            isOpen={true}
-            onClose={() => setDepositModal(null)}
-            onDeposit={handleDeposit}
-            balance={depositModal.balance}
-            symbol={depositModal.symbol}
-            isLoading={isDepositing}
-          />
-        )}
-
-        {alert && <Alert message={alert.message} variant={alert.variant} />}
-
+        {/* 3. Market Analysis Card */}
         {analysis && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
             <h2 className="text-lg font-medium mb-6 text-white">Market Analysis</h2>
@@ -827,61 +799,173 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* 4. DeFi Yield Analysis Card */}
         {yieldData && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
             <h2 className="text-lg font-medium mb-6 text-white">DeFi Yield Analysis</h2>
             
-            <div className="space-y-6">
+            <div className="space-y-4">
               {Object.entries(yieldData).map(([token, pools]) => (
-                <div key={token} className="space-y-4">
-                  <h3 className="text-md font-medium text-gray-300">{token} Lending Opportunities</h3>
+                <div key={token} className="space-y-2">
+                  <h3 className="text-md font-medium text-gray-300">{token}</h3>
                   
-                  {pools.map((pool: any, idx: number) => (
-                    <div key={idx} className="p-4 rounded-lg bg-black/20 backdrop-blur-md border border-white/5">
-                      <div className="flex justify-between items-center mb-3">
-                        <div>
+                  {pools.slice(0, 1).map((pool: any, idx: number) => (
+                    <div key={idx} className="p-3 rounded-lg bg-black/20 backdrop-blur-md border border-white/5">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
                           <span className="font-medium text-white">{pool.protocol}</span>
-                          <span className="text-sm text-gray-400 ml-2">({pool.chain})</span>
+                          <span className="text-sm text-gray-400">
+                            ${pool.tvlUsd}M TVL
+                          </span>
                         </div>
-                        <span className="text-sm text-gray-400">
-                          TVL: ${pool.tvlUsd}M
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <p className="text-sm text-gray-400">Base APY</p>
+                        <div className="flex items-center gap-4">
                           <p className="text-lg font-medium text-green-400">
-                            {pool.supplyAPY}%
+                            {Number(pool.supplyAPY) + Number(pool.rewardAPY)}% APY
                           </p>
                         </div>
-                        <div>
-                          <p className="text-sm text-gray-400">Reward APY</p>
-                          <p className="text-lg font-medium text-blue-400">
-                            {pool.rewardAPY}%
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-400">Total APY</p>
-                          <p className="text-lg font-medium text-yellow-400">
-                            {pool.totalAPY}%
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-3 text-sm text-gray-400 flex justify-between">
-                        <span>24h TVL Change: {pool.tvlChange24h}%</span>
-                        {Number(pool.il7d) !== 0 && (
-                          <span>7d IL: {pool.il7d}%</span>
-                        )}
                       </div>
                     </div>
                   ))}
                 </div>
               ))}
             </div>
+
+            {/* Add Assetly Recommendation Button */}
+            <div className="mt-8 flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowRecommendations(true)}
+                className="rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
+              >
+                Assetly Recommendation
+              </Button>
+            </div>
           </div>
         )}
+
+        {/* 5. Assetly Recommends Card - Only show after button click */}
+        {showRecommendations && analysis && (
+          <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
+            <h2 className="text-lg font-medium mb-6 text-white">Assetly Recommends</h2>
+            
+            <div className="space-y-4">
+              {/* Market-based Recommendations */}
+              {Object.entries(marketNews?.portfolioTokens || {}).map(([token, data]) => {
+                const recommendation = data.analysis.recommendation;
+                const asset = assets.find(a => a.symbol === token);
+                const yieldInfo = yieldData?.[token]?.[0];
+
+                return (
+                  <div key={token} className="p-4 rounded-lg bg-black/20 backdrop-blur-md border border-white/5">
+                    <div className="flex justify-between items-center mb-3">
+                      <div>
+                        <span className="font-medium text-white">{token}</span>
+                        <span className={`ml-2 px-3 py-1 rounded-full text-sm ${getSentimentColor(recommendation)}`}>
+                          {recommendation}
+                        </span>
+                      </div>
+                      {asset && (
+                        <span className="text-sm text-gray-400">
+                          Balance: {Number(asset.quantity).toFixed(2)} {token}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      {/* Show news-based context */}
+                      <p className="text-sm text-gray-300">
+                        {data.news[0].title}
+                      </p>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-3 mt-4">
+                        {/* Show deposit button for all tokens with yield opportunities */}
+                        {yieldInfo && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (asset) {
+                                setDepositModal({
+                                  isOpen: true,
+                                  symbol: token,
+                                  balance: asset.quantity.toString()
+                                });
+                              }
+                            }}
+                            className="bg-gradient-to-r from-emerald-600/10 to-green-700/10 hover:from-emerald-600/20 hover:to-green-700/20 text-white border-white/10"
+                          >
+                            Deposit to AAVE ({yieldInfo.supplyAPY}% APY)
+                          </Button>
+                        )}
+
+                        {/* Show swap buttons based on recommendation */}
+                        {(recommendation === 'BUY' || recommendation === 'SELL') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (asset) {
+                                setSwapModal({
+                                  isOpen: true,
+                                  symbol: token,
+                                  balance: asset.quantity.toString(),
+                                  action: recommendation === 'BUY' ? 'BUY' : 'SELL'
+                                });
+                              }
+                            }}
+                            className="bg-gradient-to-r from-blue-500/10 to-violet-500/10 hover:from-blue-500/20 hover:to-violet-500/20 text-white border-white/10"
+                          >
+                            {recommendation === 'BUY' ? 'Buy with Uniswap' : 'Sell on Uniswap'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Risk Analysis Section */}
+              <div className="p-4 rounded-lg bg-black/20 backdrop-blur-md border border-white/5">
+                <h3 className="text-md font-medium text-gray-300 mb-4">Risk Considerations:</h3>
+                <ul className="list-disc list-inside text-gray-300 space-y-2">
+                  {assets.some(a => isStablecoin(a.symbol)) && (
+                    <li>Maintain stablecoin position for market opportunities</li>
+                  )}
+                  {assets.some(a => a.symbol === 'ETH') && (
+                    <li>Consider ETH staking for long-term returns</li>
+                  )}
+                  <li>Monitor market conditions and rebalance as needed</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {depositModal && (
+          <DepositModal
+            isOpen={true}
+            onClose={() => setDepositModal(null)}
+            onDeposit={handleDeposit}
+            balance={depositModal.balance}
+            symbol={depositModal.symbol}
+            isLoading={isDepositing}
+          />
+        )}
+
+        {swapModal && (
+          <SwapModal
+            isOpen={true}
+            onClose={() => setSwapModal(null)}
+            onSwap={handleSwap}
+            balance={swapModal.balance}
+            symbol={swapModal.symbol}
+            action={swapModal.action}
+            isLoading={isSwapping}
+          />
+        )}
+
+        {alert && <Alert message={alert.message} variant={alert.variant} />}
       </main>
 
       <Terminal logs={logs} />

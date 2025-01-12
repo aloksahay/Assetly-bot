@@ -916,20 +916,23 @@ async function getAllTokenNews(tokens: string[], apiKey: string): Promise<Record
 // Helper function to calculate sentiment score from news items
 function calculateSentimentScore(news: NewsItem[]): number {
   const sentimentMap = {
-    'Positive': 1.5,
-    'Negative': -1,
+    'Positive': 2.0,  // Increased weight for positive sentiment
+    'Negative': -1.0,
     'Neutral': 0
   };
 
   const total = news.reduce((score, item) => {
     // Give more weight to recent news
     const isRecent = new Date(item.date) > new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const weight = isRecent ? 1.2 : 1;
+    const weight = isRecent ? 1.5 : 1;
     return score + (sentimentMap[item.sentiment] * weight);
   }, 0);
 
-  // Normalize to -1.5 to 1.5 range
-  return Math.max(-1.5, Math.min(1.5, total / news.length));
+  // Normalize but bias towards BUY
+  const score = total / news.length;
+  return score > 0.3 ? 'BUY' :  // Lower threshold for BUY
+         score < -0.5 ? 'SELL' : // Keep same threshold for SELL
+         'HOLD';
 }
 
 // Helper function to extract major events
@@ -1097,12 +1100,17 @@ function generateMarketSummary(
 async function processZerionData(zerionData: any): Promise<PortfolioScan> {
   try {
     // Extract positions from Zerion data
-    const positions = zerionData.data.map((position: any) => ({
-      symbol: position.attributes.fungible_info.symbol,
-      quantity: position.attributes.quantity.numeric,
-      valueUSD: position.attributes.value,
-      isStablecoin: isStablecoin(position.attributes.fungible_info.symbol)
-    }));
+    const positions = zerionData.data
+      .filter((position: any) => 
+        !position.attributes.flags.is_trash || 
+        position.attributes.fungible_info.symbol === 'LINK'
+      )
+      .map((position: any) => ({
+        symbol: position.attributes.fungible_info.symbol,
+        quantity: position.attributes.quantity.numeric,
+        valueUSD: position.attributes.value,
+        isStablecoin: isStablecoin(position.attributes.fungible_info.symbol)
+      }));
 
     // Get prices for non-stablecoin tokens
     const nonStableTokens = positions
