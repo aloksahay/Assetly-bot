@@ -1315,3 +1315,11 @@ function analyzePortfolioRisks(portfolio: PortfolioScan): PortfolioRiskAnalysis 
   };
 }
 
+// Convert sentiment string to correct type
+const convertSentiment = (sentiment: string): 'positive' | 'negative' | 'neutral' => {
+  const s = sentiment.toLowerCase();
+  if (s === 'positive') return 'positive';
+  if (s === 'negative') return 'negative';
+  return 'neutral';
+};
+
