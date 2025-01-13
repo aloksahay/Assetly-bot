@@ -2,6 +2,15 @@
 
 Assetly is an intelligent DeFi portfolio management platform that helps users analyze their crypto holdings, discover yield opportunities, and make data-driven investment decisions.
 
+## Video demo
+
+[https://assetly-ai-agent.vercel.app/](https://www.youtube.com/watch?v=CrnL4Ik1GKo)
+
+## Demo link
+
+https://assetly-ai-agent.vercel.app/
+
+
 ## Features
 
 ### 1. Portfolio Inspection
