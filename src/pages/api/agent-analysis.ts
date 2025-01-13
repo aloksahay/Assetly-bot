@@ -349,6 +349,11 @@ interface TokenNewsMap {
   [key: string]: NewsData['data'];
 }
 
+interface Position {
+  isStablecoin: boolean;
+  symbol: string;
+}
+
 function generateMarketSummary(
   generalMarket: any,
   portfolioTokens: any,
@@ -1239,8 +1244,8 @@ async function processZerionData(zerionData: any): Promise<PortfolioScan> {
 
     // Get prices for non-stablecoin tokens
     const nonStableTokens = positions
-      .filter(p => !p.isStablecoin)
-      .map(p => p.symbol);
+      .filter((p: Position) => !p.isStablecoin)
+      .map((p: Position) => p.symbol);
 
     if (nonStableTokens.length > 0) {
       const priceData = await getCMCPrices(nonStableTokens);
