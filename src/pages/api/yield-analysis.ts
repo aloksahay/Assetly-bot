@@ -92,7 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tvlUsd: (pool.tvlUsd / 1e6).toFixed(2),
           utilizationRate: '0.00',
           il7d: pool.il7d ? pool.il7d.toFixed(2) : '0.00',
-          tvlChange24h: pool.tvlChange24h ? pool.tvlChange24h.toFixed(2) : '0.00',
+          tvlChange24h: pool.tvlUsdChange24h ? pool.tvlUsdChange24h.toFixed(2) : '0.00',
           stablecoin: pool.stablecoin,
           ilRisk: pool.ilRisk,
           predictions: pool.predictions
@@ -106,13 +106,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Group by token and sort by APY, taking only top 2 non-zero APY pools
     const yieldsByToken = tokens.reduce((acc: any, token: string) => {
       const tokenPools = relevantPools
-        .filter(pool => {
+        .filter((pool: { symbol: string; totalAPY: any; }) => {
           // Filter pools for this token and ensure APY > 0
           const isMatchingToken = pool.symbol.toUpperCase().includes(token.toUpperCase());
           const hasYield = Number(pool.totalAPY) > 0;
           return isMatchingToken && hasYield;
         })
-        .sort((a, b) => Number(b.totalAPY) - Number(a.totalAPY))
+        .sort((a: { totalAPY: any; }, b: { totalAPY: any; }) => Number(b.totalAPY) - Number(a.totalAPY))
         .slice(0, 2); // Take only top 2 opportunities
       
       console.log(`Top pools found for ${token}:`, tokenPools.length);
