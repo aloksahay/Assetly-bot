@@ -12,6 +12,7 @@ import { useAgent } from "@/hooks/useAgent"
 import { PortfolioAnalysis } from "@/types/portfolio"
 import { NETWORK_CONFIG, isStablecoin } from "@/utils/constants"
 import { UniswapService } from "@/utils/uniswap"
+import { getMockNews } from '@/utils/mockData'
 
 // Add interface for asset type
 interface Asset {
