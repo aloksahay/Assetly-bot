@@ -9,7 +9,7 @@ const nextConfig = {
       '@': path.resolve(__dirname),
     };
     return config;
-  },
+  }
 };
 
 module.exports = nextConfig; 

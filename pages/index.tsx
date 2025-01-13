@@ -12,7 +12,6 @@ import { useAgent } from "@/hooks/useAgent"
 import { PortfolioAnalysis } from "@/types/portfolio"
 import { NETWORK_CONFIG, isStablecoin } from "@/utils/constants"
 import { UniswapService } from "@/utils/uniswap"
-import { getMockNews } from '@/utils/mockData'
 
 // Add interface for asset type
 interface Asset {
@@ -198,6 +197,7 @@ export default function HomePage() {
   } | null>(null);
   const [isSwapping, setIsSwapping] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(false);
+  const [showMarketAnalysis, setShowMarketAnalysis] = useState(false);
 
   const addLog = (message: string, type?: 'info' | 'error' | 'success') => {
     setLogs(prev => [...prev, {
@@ -462,6 +462,9 @@ export default function HomePage() {
           }
         }
       });
+      
+      // Show the market analysis card after analysis is complete
+      setShowMarketAnalysis(true);
     } catch (err) {
       console.error('Market analysis error:', err);
       addLog('❌ Market analysis failed: ' + err, 'error');
@@ -721,7 +724,7 @@ export default function HomePage() {
         )}
 
         {/* 3. Market Analysis Card */}
-        {analysis && (
+        {showMarketAnalysis && analysis && (
           <div className="rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-6 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out">
             <h2 className="text-lg font-medium mb-6 text-white">Market Analysis</h2>
             

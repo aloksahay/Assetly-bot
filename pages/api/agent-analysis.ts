@@ -3,7 +3,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import axios from 'axios';
 import { ethers } from 'ethers';
 import { isStablecoin } from '@/utils/constants';
-import { getMockNews } from '@/utils/mockData';
+import { getNews, getTokenSentiment } from '@/utils/cryptoNews';
 
 interface TokenPosition {
   symbol: string;
@@ -851,30 +851,16 @@ function getTopTokens(tokens: string[]): string[] {
     .slice(0, 6);
 }
 
-// Modified function to get news for a single token
+// Update the getTokenNews function to use real API directly
 async function getTokenNews(token: string, apiKey: string, pages: number = 1): Promise<NewsItem[]> {
-  // Use mock data in development
-  if (process.env.NODE_ENV === 'development') {
-    const mockResponse = getMockNews(token);
-    return mockResponse.data;
-  }
-
-  // Real API call only happens in production
   const allNews: NewsItem[] = [];
   
   for (let page = 1; page <= pages; page++) {
     try {
-      const response = await axios.get<NewsResponse>('https://cryptonews-api.com/api/v1', {
-        params: {
-          token: apiKey,
-          items: 3,
-          tickers: token,
-          page: page
-        }
-      });
-
-      if (response.data.data && response.data.data.length > 0) {
-        allNews.push(...response.data.data);
+      const response = await getNews(token, 3);  // Use the real API call
+      
+      if (response.data && response.data.length > 0) {
+        allNews.push(...response.data);
       }
 
       if (page < pages) {
@@ -890,27 +876,21 @@ async function getTokenNews(token: string, apiKey: string, pages: number = 1): P
 }
 
 // Function to get news for multiple tokens
-async function getAllTokenNews(tokens: string[], apiKey: string): Promise<Record<string, NewsItem[]>> {
-  const newsMap: Record<string, NewsItem[]> = {};
+async function getAllTokenNews(tokens: string[], apiKey: string) {
+  const tokenNewsMap = {};
   
-  // Get news for each token separately
   for (const token of tokens) {
     try {
-      // Get 3 news items for this token
-      const tokenNews = await getTokenNews(token, apiKey);
-      newsMap[token] = tokenNews;
-      
-      // Add delay between token requests
-      if (token !== tokens[tokens.length - 1]) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+      const news = await getNews(token);
+      if (news.data && news.data.length > 0) {
+        tokenNewsMap[token] = news.data;
       }
     } catch (error) {
-      console.error(`Failed to get news for ${token}:`, error);
-      newsMap[token] = [];
+      console.error(`Error fetching news for ${token}:`, error);
     }
   }
-
-  return newsMap;
+  
+  return tokenNewsMap;
 }
 
 // Helper function to calculate sentiment score from news items
