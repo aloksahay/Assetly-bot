@@ -333,10 +333,15 @@ interface MarketSummary {
 
 interface NewsData {
   data: Array<{
-    // Add specific news item properties here
+    news_url: string;
+    image_url: string;
     title: string;
-    description: string;
-    // ... other news properties
+    text: string;
+    source_name: string;
+    date: string;
+    topics: string[];
+    sentiment: 'Positive' | 'Negative' | 'Neutral';
+    type: string;
   }>;
 }
 

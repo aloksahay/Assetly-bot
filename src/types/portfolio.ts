@@ -1,9 +1,9 @@
 export interface PortfolioAnalysis {
   assessment: string;
-  opportunities: any[];
+  opportunities: string[];
   strategy: string;
   timestamp: number;
-  portfolioTokens: any;
+  portfolioTokens: Record<string, any>;
   defiMarketData: {
     protocols: any[];
     aggregateStats: {
