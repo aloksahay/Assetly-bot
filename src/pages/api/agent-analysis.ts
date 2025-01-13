@@ -778,7 +778,7 @@ async function analyzeMajorEvents(newsItems: any[]): Promise<GeneralMarketNews['
      Return as JSON array matching the majorEvents interface.`
   );
 
-  return JSON.parse(response.content);
+  return JSON.parse(response.content.toString());
 }
 
 // Helper function to analyze technical indicators for volatility
