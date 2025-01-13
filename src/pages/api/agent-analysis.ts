@@ -331,6 +331,19 @@ interface MarketSummary {
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
+interface NewsData {
+  data: Array<{
+    // Add specific news item properties here
+    title: string;
+    description: string;
+    // ... other news properties
+  }>;
+}
+
+interface TokenNewsMap {
+  [key: string]: NewsData['data'];
+}
+
 function generateMarketSummary(
   generalMarket: any,
   portfolioTokens: any,
@@ -868,16 +881,17 @@ function calculateMarketMoods(allNews: any[]): GeneralMarketNews['marketMoods'] 
 // Helper function to batch tokens for CryptoNews API
 function batchTokensForNews(tokens: string[]): string[][] {
   // Sort tokens by value/importance first (you can modify this logic)
+  type TokenSymbol = 'ETH' | 'BTC' | 'BNB' | 'LINK';
+  
+  const priority: Record<TokenSymbol, number> = {
+    'ETH': 3,
+    'BTC': 3,
+    'BNB': 2,
+    'LINK': 2,
+  };
+
   const sortedTokens = [...tokens].sort((a, b) => {
-    // Prioritize major tokens
-    const priority = {
-      'ETH': 3,
-      'BTC': 3,
-      'BNB': 2,
-      'LINK': 2,
-      // Add more as needed
-    };
-    return (priority[b] || 1) - (priority[a] || 1);
+    return (priority[b as TokenSymbol] || 1) - (priority[a as TokenSymbol] || 1);
   });
 
   // Split into batches of 3
@@ -932,8 +946,8 @@ async function getTokenNews(token: string, apiKey: string, pages: number = 1): P
 }
 
 // Function to get news for multiple tokens
-async function getAllTokenNews(tokens: string[], apiKey: string) {
-  const tokenNewsMap = {};
+async function getAllTokenNews(tokens: string[], apiKey: string): Promise<TokenNewsMap> {
+  const tokenNewsMap: TokenNewsMap = {};
   
   for (const token of tokens) {
     try {
