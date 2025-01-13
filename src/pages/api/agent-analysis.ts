@@ -585,7 +585,7 @@ async function analyzeETHPosition(amount: number): Promise<ETHMarketAnalysis> {
             protocol: bestYield.project,
             apy: bestYield.apy,
             tvl: bestYield.tvlUsd,
-            risk: calculateRisk(bestYield)
+            risk: calculateILRisk(bestYield)
           }
         }
       },
