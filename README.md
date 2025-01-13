@@ -73,6 +73,7 @@ Assetly is an intelligent DeFi portfolio management platform that helps users an
 ## APIs
 - OpenAI
 - Zerion
+- CryptoNews
 - CoinGecko
 - CoinMarketCap
 - DefiLlama
