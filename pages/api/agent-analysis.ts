@@ -914,25 +914,67 @@ async function getAllTokenNews(tokens: string[], apiKey: string): Promise<Record
 }
 
 // Helper function to calculate sentiment score from news items
-function calculateSentimentScore(news: NewsItem[]): number {
+function calculateSentimentScore(news: NewsItem[]): string {
   const sentimentMap = {
-    'Positive': 2.0,  // Increased weight for positive sentiment
-    'Negative': -1.0,
+    'Positive': 1.0,
+    'Negative': -1.5,
     'Neutral': 0
   };
 
   const total = news.reduce((score, item) => {
+    let itemScore = sentimentMap[item.sentiment];
+    
+    // Analyze the content for context
+    const text = (item.title + ' ' + item.text).toLowerCase();
+    
+    // Analyze price movements
+    const priceMatch = text.match(/(\d+)%\s*(drop|decline|increase|rise|gain)/);
+    if (priceMatch) {
+      const percentage = parseInt(priceMatch[1]);
+      const direction = priceMatch[2];
+      
+      if (direction.match(/drop|decline/)) {
+        // Price drops are weighted based on severity
+        itemScore -= (percentage > 20 ? 1.0 : 0.5);
+      } else if (direction.match(/increase|rise|gain/)) {
+        // Price gains are weighted based on significance
+        itemScore += (percentage > 20 ? 0.8 : 0.4);
+      }
+    }
+
+    // Analyze market sentiment context
+    if (text.includes('despite')) {
+      // "Despite" often indicates a contrarian view
+      itemScore *= -0.5; // Reduce the impact of the sentiment
+    }
+
+    // Consider source credibility
+    const sourceFactor = getSourceCredibility(item.source_name);
+    itemScore *= sourceFactor;
+
     // Give more weight to recent news
-    const isRecent = new Date(item.date) > new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const weight = isRecent ? 1.5 : 1;
-    return score + (sentimentMap[item.sentiment] * weight);
+    const isRecent = new Date(item.date) > new Date(Date.now() - 48 * 60 * 60 * 1000);
+    return score + (itemScore * (isRecent ? 1.5 : 1.0));
   }, 0);
 
-  // Normalize but bias towards BUY
   const score = total / news.length;
-  return score > 0.3 ? 'BUY' :  // Lower threshold for BUY
-         score < -0.5 ? 'SELL' : // Keep same threshold for SELL
-         'HOLD';
+  
+  // Dynamic thresholds based on news volume and consistency
+  const threshold = Math.min(0.3 * Math.sqrt(news.length), 0.5);
+  
+  if (score < -threshold) return 'SELL';
+  if (score > threshold) return 'BUY';
+  return 'HOLD';
+}
+
+// Helper function to weight news sources
+function getSourceCredibility(source: string): number {
+  const topSources = ['Bloomberg', 'Reuters', 'CoinDesk', 'The Block'];
+  const goodSources = ['Cointelegraph', 'NewsBTC', 'Decrypt'];
+  
+  if (topSources.some(s => source.includes(s))) return 1.2;
+  if (goodSources.some(s => source.includes(s))) return 1.0;
+  return 0.8;
 }
 
 // Helper function to extract major events

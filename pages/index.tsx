@@ -871,55 +871,48 @@ export default function HomePage() {
                       )}
                     </div>
 
-                    <div className="space-y-3">
-                      {/* Show news-based context */}
-                      <p className="text-sm text-gray-300">
-                        {data.news[0].title}
-                      </p>
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 mt-4">
+                      {/* Show deposit button for all tokens with yield opportunities */}
+                      {yieldInfo && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (asset) {
+                              setDepositModal({
+                                isOpen: true,
+                                symbol: token,
+                                balance: asset.quantity.toString()
+                              });
+                            }
+                          }}
+                          className="bg-gradient-to-r from-emerald-600/10 to-green-700/10 hover:from-emerald-600/20 hover:to-green-700/20 text-white border-white/10"
+                        >
+                          Deposit to AAVE ({yieldInfo.supplyAPY}% APY)
+                        </Button>
+                      )}
 
-                      {/* Action Buttons */}
-                      <div className="flex gap-3 mt-4">
-                        {/* Show deposit button for all tokens with yield opportunities */}
-                        {yieldInfo && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              if (asset) {
-                                setDepositModal({
-                                  isOpen: true,
-                                  symbol: token,
-                                  balance: asset.quantity.toString()
-                                });
-                              }
-                            }}
-                            className="bg-gradient-to-r from-emerald-600/10 to-green-700/10 hover:from-emerald-600/20 hover:to-green-700/20 text-white border-white/10"
-                          >
-                            Deposit to AAVE ({yieldInfo.supplyAPY}% APY)
-                          </Button>
-                        )}
-
-                        {/* Show swap buttons based on recommendation */}
-                        {(recommendation === 'BUY' || recommendation === 'SELL') && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              if (asset) {
-                                setSwapModal({
-                                  isOpen: true,
-                                  symbol: token,
-                                  balance: asset.quantity.toString(),
-                                  action: recommendation === 'BUY' ? 'BUY' : 'SELL'
-                                });
-                              }
-                            }}
-                            className="bg-gradient-to-r from-blue-500/10 to-violet-500/10 hover:from-blue-500/20 hover:to-violet-500/20 text-white border-white/10"
-                          >
-                            {recommendation === 'BUY' ? 'Buy with Uniswap' : 'Sell on Uniswap'}
-                          </Button>
-                        )}
-                      </div>
+                      {/* Show swap buttons based on recommendation */}
+                      {(recommendation === 'BUY' || recommendation === 'SELL') && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (asset) {
+                              setSwapModal({
+                                isOpen: true,
+                                symbol: token,
+                                balance: asset.quantity.toString(),
+                                action: recommendation === 'BUY' ? 'BUY' : 'SELL'
+                              });
+                            }
+                          }}
+                          className="bg-gradient-to-r from-blue-500/10 to-violet-500/10 hover:from-blue-500/20 hover:to-violet-500/20 text-white border-white/10"
+                        >
+                          {recommendation === 'BUY' ? 'Buy with Uniswap' : 'Sell on Uniswap'}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
