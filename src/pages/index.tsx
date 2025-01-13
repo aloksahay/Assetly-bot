@@ -8,7 +8,7 @@ import { Alert } from "@/components/ui/alert"
 import { DepositModal } from '@/components/DepositModal'
 import { PortfolioAnalyzer } from '@/lib/portfolio/PortfolioAnalyzer'
 import { useAgent } from "@/hooks/useAgent"
-import { PortfolioAnalysis } from "@/types/portfolio"
+import { PortfolioAnalysis, PortfolioValuation, PortfolioAssessment, OpportunityAssessment, StrategyRecommendation } from "@/types/portfolio"
 import { NETWORK_CONFIG, isStablecoin } from "@/utils/constants"
 import { UniswapService } from "@/utils/uniswap"
 import { SwapModal } from "@/components/SwapModal"
@@ -53,35 +53,6 @@ interface DeFiAnalysisProps {
   };
 }
 
-// Add new interfaces for the enhanced analysis display
-interface DeFiAnalysisProps {
-  valuation: PortfolioValuation;
-  defiMarketData: {
-    protocols: Array<{
-      tvl: number;
-      apy: number;
-      symbol: string;
-      project: string;
-      ilRisk: string;
-      protocolChange24h: number;
-      protocolChange7d: number;
-    }>;
-    aggregateStats: {
-      totalTvl: number;
-      avgApy: number;
-      volumeUsd24h: number;
-      avgBaseApy: number;
-      avgRewardApy: number;
-      totalProtocols: number;
-    };
-  };
-  analysis: {
-    assessment: PortfolioAssessment;
-    opportunities: OpportunityAssessment;
-    strategy: StrategyRecommendation;
-  };
-}
-
 // Common card classes
 const cardClasses = "rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border border-white/10 p-4 hover:bg-white/10 hover:scale-[1.01] hover:shadow-3xl transition-all duration-300 ease-out"
 
@@ -89,6 +60,13 @@ const cardClasses = "rounded-xl bg-white/5 shadow-2xl backdrop-blur-lg border bo
 const primaryButtonClasses = "rounded-full bg-gradient-to-r from-blue-500 to-violet-500 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
 const recommendButtonClasses = "rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium px-6 hover:opacity-90 transition-opacity"
 const depositButtonClasses = "rounded-full bg-gradient-to-r from-emerald-600 to-green-700 text-white border-0 font-medium hover:opacity-90 transition-opacity"
+
+interface Pool {
+  protocol: string;
+  tvlUsd: number;
+  supplyAPY: number;
+  rewardAPY: number;
+}
 
 export default function HomePage() {
   const { 
@@ -366,12 +344,12 @@ export default function HomePage() {
           '',
           'Key Events:',
           ...(marketAnalysis?.generalMarket?.majorEvents?.map(
-            e => `- ${e.title} (Impact: ${e.impact})`
+            (e: { title: string; impact: string }) => `- ${e.title} (Impact: ${e.impact})`
           ) || ['No major events']),
           '',
           'Token Analysis:',
           ...Object.entries(marketAnalysis?.portfolioTokens || {}).map(
-            ([token, data]) => 
+            ([token, data]: [string, any]) => 
               `${token}: ${data?.analysis?.recommendation || 'WATCH'} ` + 
               `(Sentiment: ${data?.analysis?.sentiment || 0})`
           )
@@ -435,10 +413,6 @@ export default function HomePage() {
     try {
       if (!window.ethereum) throw new Error('Please install MetaMask');
 
-      // Network check (same as deposit)
-      addLog('Checking network...');
-      // ... (reuse network check code from handleDeposit)
-
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       addLog('Connected to wallet signer', 'success');
@@ -446,23 +420,23 @@ export default function HomePage() {
       const uniswap = new UniswapService(provider);
       addLog('Initialized Uniswap service');
 
-      // Get token addresses (you'll need to maintain a mapping or fetch these)
       const tokenIn = swapModal?.action === 'SELL' ? swapModal.symbol : 'ETH';
       const tokenOut = swapModal?.action === 'BUY' ? swapModal.symbol : 'ETH';
       
       addLog(`Preparing to swap ${amount} ${tokenIn} for ${tokenOut}`);
       
-      const tx = await uniswap.swap(
+      const tx = await (uniswap.swap(
         tokenIn,
         tokenOut,
         amount,
         signer
-      );
+      ) as unknown as Promise<ethers.ContractTransactionResponse>);
 
-      addLog('Transaction submitted. Waiting for confirmation...');
-      addLog(`Transaction hash: ${tx.hash}`);
-      
-      await tx.wait();
+      if (!tx) {
+        throw new Error('Transaction failed');
+      }
+      addLog('Transaction submitted. Waiting for confirmation...');    
+      const receipt = await tx.wait();
       addLog('Swap transaction confirmed!', 'success');
       setSwapModal(null);
 
@@ -677,7 +651,9 @@ export default function HomePage() {
                   Events Potentially Affecting Your Holdings
                 </h3>
                 <div className="space-y-4">
-                  {Object.entries(marketNews?.portfolioTokens || {}).map(([token, data]) => {
+                  {Object.entries(marketNews?.portfolioTokens || {}).map(([token, data]: [string, any]) => {
+                    if (!data?.analysis) return null; // Skip if no analysis
+                    
                     const news = data.news[0];  // Just get the first news item
                     return (
                       <div key={token} className="p-3 rounded-lg hover:bg-white/5 transition-colors duration-200">
@@ -738,29 +714,32 @@ export default function HomePage() {
             <h2 className="text-lg font-medium mb-4 text-white">DeFi Yield Analysis</h2>
             
             <div className="space-y-4">
-              {Object.entries(yieldData).map(([token, pools]) => (
-                <div key={token} className="space-y-2">
-                  <h3 className="text-md font-medium text-gray-300">{token}</h3>
-                  
-                  {pools.slice(0, 1).map((pool: any, idx: number) => (
-                    <div key={idx} className="p-3 rounded-lg bg-black/20 backdrop-blur-md border border-white/5">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-white">{pool.protocol}</span>
-                          <span className="text-sm text-gray-400">
-                            ${pool.tvlUsd}M TVL
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <p className="text-lg font-medium text-green-400">
-                            {Number(pool.supplyAPY) + Number(pool.rewardAPY)}% APY
-                          </p>
+              {Object.entries(yieldData || {}).map(([token, pools]: [string, unknown]) => {
+                const poolsArray = pools as Pool[];
+                return (
+                  <div key={token} className="space-y-2">
+                    <h3 className="text-md font-medium text-gray-300">{token}</h3>
+                    
+                    {poolsArray.slice(0, 1).map((pool, idx) => (
+                      <div key={idx} className="p-3 rounded-lg bg-black/20 backdrop-blur-md border border-white/5">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-white">{pool.protocol}</span>
+                            <span className="text-sm text-gray-400">
+                              ${pool.tvlUsd}M TVL
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <p className="text-lg font-medium text-green-400">
+                              {Number(pool.supplyAPY) + Number(pool.rewardAPY)}% APY
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
+                    ))}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Add Assetly Recommendation Button */}
@@ -783,7 +762,9 @@ export default function HomePage() {
             
             <div className="space-y-4">
               {/* Market-based Recommendations */}
-              {Object.entries(marketNews?.portfolioTokens || {}).map(([token, data]) => {
+              {Object.entries(marketNews?.portfolioTokens || {}).map(([token, data]: [string, any]) => {
+                if (!data?.analysis) return null; // Skip if no analysis
+                
                 const recommendation = data.analysis.recommendation;
                 const asset = assets.find(a => a.symbol === token);
                 const yieldInfo = yieldData?.[token]?.[0];

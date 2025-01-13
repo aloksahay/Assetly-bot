@@ -32,4 +32,27 @@ export interface PortfolioValuation {
   totalValueUSD: number;
   riskScore?: number;
   timestamp: number;
+}
+
+export interface PortfolioAssessment {
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  diversificationScore: number;
+  healthScore: number;
+  summary: string;
+}
+
+export interface OpportunityAssessment {
+  potentialGains: string[];
+  risks: string[];
+  suggestions: string[];
+}
+
+export interface StrategyRecommendation {
+  actions: Array<{
+    type: 'BUY' | 'SELL' | 'HOLD' | 'REBALANCE';
+    asset?: string;
+    reason: string;
+  }>;
+  timeframe: 'SHORT_TERM' | 'MEDIUM_TERM' | 'LONG_TERM';
+  summary: string;
 } 
