@@ -11,13 +11,12 @@ export interface PortfolioRecommendation {
 }
 
 export class PortfolioManager {
-  private readonly SCAN_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  private readonly SCAN_INTERVAL = 5 * 60 * 1000;
   private lastScanTime = 0;
 
   async analyzePortfolio(assets: any[]): Promise<PortfolioRecommendation[]> {
     const recommendations: PortfolioRecommendation[] = []
 
-    // Filter for stablecoins and ETH
     const relevantAssets = assets.filter(asset => 
       ['USDC', 'USDT', 'DAI', 'ETH'].includes(asset.attributes.fungible_info.symbol)
     )
@@ -28,7 +27,6 @@ export class PortfolioManager {
         const quantity = asset.attributes.quantity.numeric
         let apy = ''
 
-        // Current AAVE V3 lending rates
         switch(symbol) {
           case 'ETH':
             apy = '4.82%'

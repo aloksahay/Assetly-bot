@@ -1,12 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { AgentConfig, AgentResponse } from '@/utils/types';
 
 export function useAgent() {
-  const [agent, setAgent] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [responses, setResponses] = useState<AgentResponse[]>([]);
 
-  useEffect(() => {
-    // Initialize agent
-    setAgent({});
-  }, []);
+  const agent = {
+    async analyze(data: any) {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        return {
+          message: 'Analysis complete',
+          data: {}
+        };
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Analysis failed');
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
 
-  return { agent };
+  return {
+    agent,
+    loading,
+    error,
+    responses
+  };
 } 

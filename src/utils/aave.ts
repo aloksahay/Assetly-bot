@@ -63,7 +63,6 @@ export class AaveService {
     try {
       const poolWithSigner = this.pool.connect(signer)
       
-      console.log('Approving AAVE to spend USDC...')
       const erc20 = new ethers.Contract(
         AAVE_ADDRESSES.USDC,
         ['function approve(address spender, uint256 amount) returns (bool)'],
@@ -72,9 +71,7 @@ export class AaveService {
       
       const approveTx = await erc20.approve(AAVE_ADDRESSES.POOL, amount)
       await approveTx.wait()
-      console.log('Approval successful')
 
-      console.log('Depositing to AAVE...')
       const depositTx = await this.pool.supply(
         AAVE_ADDRESSES.USDC,
         amount,
@@ -82,10 +79,7 @@ export class AaveService {
         0
       )
 
-      console.log('Waiting for deposit confirmation...')
       await depositTx.wait()
-      console.log('Deposit successful')
-
       return depositTx
 
     } catch (error) {
