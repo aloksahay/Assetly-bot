@@ -46,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ];
         
         // Check if pool matches any of our tokens
-        const isRelevantToken = tokens.some(token => {
+        const isRelevantToken = tokens.some((token: string) => {
           // For ETH, we need to look for WETH in AAVE
           if (token === 'ETH' && pool.symbol === 'WETH') {
             return true;
