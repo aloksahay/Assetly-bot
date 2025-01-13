@@ -24,16 +24,32 @@ const AAVE_POOL_ABI = [
   'function getUserAccountData(address user) view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)'
 ]
 
+interface AavePool extends ethers.BaseContract {
+  supply(
+    asset: string,
+    amount: string,
+    onBehalfOf: string,
+    referralCode: number
+  ): Promise<ethers.ContractTransactionResponse>;
+  getUserAccountData(
+    user: string
+  ): Promise<[bigint, bigint, bigint, bigint, bigint, bigint]>;
+}
+
 export class AaveService {
   private provider: ethers.Provider
-  private pool: ethers.Contract
+  private pool: AavePool
 
   constructor(provider: ethers.Provider) {
     if (!provider) {
       throw new Error('Provider is required')
     }
     this.provider = provider
-    this.pool = new ethers.Contract(AAVE_ADDRESSES.POOL, AAVE_POOL_ABI, provider)
+    this.pool = new ethers.Contract(
+      AAVE_ADDRESSES.POOL, 
+      AAVE_POOL_ABI, 
+      provider
+    ) as unknown as AavePool;
   }
 
   async deposit(
@@ -59,7 +75,7 @@ export class AaveService {
       console.log('Approval successful')
 
       console.log('Depositing to AAVE...')
-      const depositTx = await poolWithSigner.supply(
+      const depositTx = await this.pool.supply(
         AAVE_ADDRESSES.USDC,
         amount,
         await signer.getAddress(),
