@@ -3,8 +3,7 @@ import { createPublicClient, http, formatEther } from 'viem';
 import { sepolia } from 'viem/chains';
 import { NETWORK_CONFIG } from '@/utils/constants';
 import { PortfolioManager, PortfolioRecommendation } from '@/utils/portfolio-manager';
-
-const SUBSCRIPTION_ADDRESS = process.env.NEXT_PUBLIC_SUBSCRIPTION_ADDRESS!;
+import { ethers } from 'ethers';
 
 // Create a public client for Sepolia
 const publicClient = createPublicClient({
@@ -103,39 +102,6 @@ export function useWallet() {
       setLoading(false);
     }
   }, []);
-
-  const sendTransaction = useCallback(async () => {
-    if (!window.ethereum || !address) {
-      setError('Please connect your wallet first');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-
-      const tx = await signer.sendTransaction({
-        to: SUBSCRIPTION_ADDRESS,
-        value: ethers.parseUnits('0.001', 'ether')
-      });
-
-      await tx.wait();
-      await fetchBalance(address);
-      setAlert({ message: 'Transaction successful!', variant: 'success' });
-      setTimeout(() => setAlert(null), 3000);
-    } catch (err) {
-      setAlert({ 
-        message: err instanceof Error ? err.message : 'Transaction failed', 
-        variant: 'error' 
-      });
-      setTimeout(() => setAlert(null), 3000);
-    } finally {
-      setLoading(false);
-    }
-  }, [address, fetchBalance]);
 
   const analyzePortfolio = async () => {
     if (!address) return null;
