@@ -9,7 +9,18 @@ const AAVE_ADDRESSES = {
 
 // AAVE V3 Pool ABI (minimal for deposit)
 const AAVE_POOL_ABI = [
-  'function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)',
+  {
+    "inputs": [
+      {"internalType": "address", "name": "asset", "type": "address"},
+      {"internalType": "uint256", "name": "amount", "type": "uint256"},
+      {"internalType": "address", "name": "onBehalfOf", "type": "address"},
+      {"internalType": "uint16", "name": "referralCode", "type": "uint16"}
+    ],
+    "name": "supply",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
   'function getUserAccountData(address user) view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)'
 ]
 
