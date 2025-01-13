@@ -19,7 +19,7 @@ export default async function handler(
       return res.status(400).json({ error: 'Portfolio data is required' })
     }
 
-    const portfolioManager = new PortfolioManager(process.env.BRIAN_API_KEY!)
+    const portfolioManager = new PortfolioManager()
     const recommendations = await portfolioManager.analyzePortfolio(portfolioData)
     
     // Log recommendations before sending
