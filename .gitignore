@@ -37,3 +37,6 @@ next-env.d.ts
 # Don't ignore src directory
 !src/
 !src/**/*
+
+# ESLint
+.eslintcache
