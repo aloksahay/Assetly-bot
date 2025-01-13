@@ -505,7 +505,8 @@ async function getPortfolioValuation(positions: TokenPosition[]): Promise<Portfo
 
     return {
       positions: valuedPositions,
-      totalValueUSD: totalValue
+      totalValueUSD: totalValue,
+      timestamp: Date.now()
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
