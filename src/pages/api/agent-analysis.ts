@@ -669,9 +669,9 @@ function generateETHRecommendation({
 async function analyzeMarketSentiment(tokens: string[]): Promise<MarketSentiment> {
   try {
     // Get token-specific sentiment (existing code)
-    const tokenSentiment = await getTokenSentiment(tokens);
+    const tokenSentiment = await getTokenSentiment(tokens[0]);
     
-    // Get general market news and volatility analysis
+    // Get general market news and volatility analysis 
     const generalMarketNews = await getGeneralMarketNews();
 
     // Combine token-specific and general market analysis
