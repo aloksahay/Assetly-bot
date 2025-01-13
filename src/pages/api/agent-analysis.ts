@@ -320,6 +320,42 @@ interface NewsResponse {
   total_items: number;
 }
 
+interface PortfolioRiskAnalysis {
+  actions: string[];
+  opportunities: string[];
+}
+
+interface MarketSummary {
+  opportunities: string[];
+  actionItems: string[];
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+function generateMarketSummary(
+  generalMarket: any,
+  portfolioTokens: any,
+  portfolio: PortfolioScan
+): MarketSummary {
+  const opportunities: string[] = [];
+  const actionItems: string[] = ['Monitor market conditions'];
+  let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' = 'MEDIUM';
+
+  const portfolioRiskAnalysis: PortfolioRiskAnalysis | null = analyzePortfolioRisks(portfolio);
+  
+  if (portfolioRiskAnalysis?.actions?.length) {
+    actionItems.push(...portfolioRiskAnalysis.actions);
+  }
+  if (portfolioRiskAnalysis?.opportunities?.length) {
+    opportunities.push(...portfolioRiskAnalysis.opportunities);
+  }
+
+  return {
+    opportunities,
+    actionItems,
+    riskLevel
+  };
+}
+
 // Function to fetch DeFi protocol data from DeFiLlama
 async function getDeFiMarketData(tokens: string[]): Promise<MarketData> {
   try {
@@ -1129,15 +1165,6 @@ function analyzeTokenNews(news: NewsItem[], symbol: string): MarketNewsAnalysis[
   // Implementation here
 }
 
-function generateMarketSummary(
-  generalMarket: any,
-  portfolioTokens: any,
-  portfolio: PortfolioScan
-): MarketNewsAnalysis['summary'] {
-  // Generate comprehensive market summary
-  // Implementation here
-}
-
 // Add this function to process Zerion data
 async function processZerionData(zerionData: any): Promise<PortfolioScan> {
   try {
@@ -1163,7 +1190,7 @@ async function processZerionData(zerionData: any): Promise<PortfolioScan> {
       const priceData = await getCMCPrices(nonStableTokens);
       
       // Update positions with price data
-      positions.forEach(position => {
+      positions.forEach((position: { isStablecoin: any; symbol: string | number; priceData: { price: any; change24h: any; marketCap: any; volume24h: any; }; }) => {
         if (!position.isStablecoin && priceData[position.symbol]) {
           position.priceData = {
             price: priceData[position.symbol].quote.USD.price,
@@ -1176,7 +1203,7 @@ async function processZerionData(zerionData: any): Promise<PortfolioScan> {
     }
 
     // Calculate total portfolio value
-    const totalValue = positions.reduce((sum, pos) => sum + pos.valueUSD, 0);
+    const totalValue = positions.reduce((sum: any, pos: { valueUSD: any; }) => sum + pos.valueUSD, 0);
 
     return {
       tokens: positions,
@@ -1249,3 +1276,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 } 
+
+function calculateProbability(news: any): any {
+  throw new Error('Function not implemented.');
+}
+function extractTimeframe(title: any): any {
+  throw new Error('Function not implemented.');
+}
+
+function calculateImpact(news: any): any {
+  throw new Error('Function not implemented.');
+}
+
+function analyzePortfolioRisks(portfolio: PortfolioScan): PortfolioRiskAnalysis | null {
+  // Make sure the function returns a value
+  return {
+    actions: [],
+    opportunities: []
+  };
+}
+
