@@ -132,7 +132,26 @@ interface TokenPrice {
 }
 
 interface MarketData {
-  protocols: Protocol[];
+  protocols: {
+    protocolTvl: number;
+    protocolChange24h: number;
+    protocolChange7d: number;
+    tvl: number;
+    apy: number;
+    symbol: string;
+    pool: string;
+    project: string;
+    chain: string;
+    apyPct30d: number;
+    volumeUsd24h: number;
+    stablecoin: boolean;
+    ilRisk: string;
+    exposure: string[];
+    baseApy: number;
+    rewardApy: number;
+    tvlChange24h: number;
+    rewardTokens: string[];
+  }[];
   aggregateStats: {
     totalTvl: number;
     avgApy: number;
